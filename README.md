@@ -1,5 +1,13 @@
 # Perdix
 
+[![Crates.io](https://img.shields.io/crates/v/perdix.svg)](https://crates.io/crates/perdix)
+[![Documentation](https://docs.rs/perdix/badge.svg)](https://docs.rs/perdix)
+[![Downloads](https://img.shields.io/crates/d/perdix.svg)](https://crates.io/crates/perdix)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust Version](https://img.shields.io/badge/rust-1.75%2B-blue.svg)](https://www.rust-lang.org)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/the-muppet/perdix/ci.yml?branch=main)](https://github.com/the-muppet/perdix/actions)
+[![dependency status](https://deps.rs/repo/github/the-muppet/perdix/status.svg)](https://deps.rs/repo/github/the-muppet/perdix)
+
 High-performance GPU-accelerated ring buffer for ultra-low latency streaming between producers and consumers. Optimized for multiple AI text streaming workloads to prevent screen tearing and terminal corruption with support for NVIDIA CUDA, WebGPU, and CPU fallback.
 
 ## Overview
@@ -37,6 +45,19 @@ Perdix implements a lock-free, zero-copy Single Producer Single Consumer (SPSC) 
 #### For WebGPU Support
 - Modern GPU with WebGPU support
 - Compatible graphics drivers
+
+### As a Dependency
+
+Add Perdix to your `Cargo.toml`:
+
+```toml
+[dependencies]
+perdix = "0.1"
+
+# Or with specific features:
+perdix = { version = "0.1", features = ["cuda"] }  # NVIDIA GPU support
+perdix = { version = "0.1", features = ["webgpu"] }  # Cross-platform GPU
+```
 
 ### Building from Source
 
@@ -310,26 +331,6 @@ perdix/
 ```
 
 ## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-cargo test
-
-# Run with CUDA features
-cargo test --features cuda
-
-# Run documentation tests
-cargo test --doc
-```
-
-### Building Documentation
-
-```bash
-# Generate and open documentation
-cargo doc --all-features --no-deps --open
-```
 
 ### Contributing
 

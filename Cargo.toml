@@ -1,14 +1,34 @@
 [package]
 name = "perdix"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
+rust-version = "1.75"
 default-run = "perdix"
 license = "MIT"
-authors = ["Robert Pratt"]
+authors = ["Robert Pratt <elmo@bdwinc.org>"]
 description = "High-performance GPU-accelerated ring buffer for AI terminal multiplexing"
+documentation = "https://docs.rs/perdix"
+homepage = "https://github.com/the-muppet/perdix"
 repository = "https://github.com/the-muppet/perdix"
+readme = "README.md"
 keywords = ["gpu", "cuda", "webgpu", "ring-buffer", "terminal"]
-categories = ["concurrency", "asynchronous", "command-line-utilities"]
+categories = ["concurrency", "asynchronous", "command-line-utilities", "data-structures"]
+exclude = [
+    "/.github",
+    "/assets",
+    "/*.sh",
+    "/.gitignore",
+    "/tests/fixtures",
+]
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "build.rs",
+    "src/**/*.cu",
+]
 
 [lib]
 name = "perdix"
@@ -57,3 +77,11 @@ harness = false
 name = "gpu_vs_cpu"
 harness = false
 required-features = ["cuda"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+
+[badges]
+maintenance = { status = "actively-developed" }
