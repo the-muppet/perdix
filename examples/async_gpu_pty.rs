@@ -1,4 +1,4 @@
-use perdix::buffer::Buffer;
+use perdix::buffer::{Buffer, Producer, Consumer};
 use perdix::buffer::gpu_arena::GpuTextArena;
 #[cfg(feature = "pty")]
 use perdix::pty::zero_copy::ZeroCopyPtyWriter;
