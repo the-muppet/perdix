@@ -96,28 +96,34 @@ impl<'a> Producer<'a> {
         Ok(())
     }
 
-    /// Async version using GPU text arena for true streaming
+    /// Launch async GPU kernel using pre-uploaded arena
     #[cfg(feature = "cuda")]
-    pub fn process_agent_responses_async(
+    pub fn launch_async_gpu_kernel(
         &mut self,
-        contexts: &[StreamContext],
-        enable_metrics: bool,
-        arena: &mut GpuTextArena,
+        arena: &GpuTextArena,
+        n_messages: u32,
     ) -> Result<(), String> {
-        if contexts.is_empty() {
-            return Ok(());
+        // Get device pointers from arena
+        let (d_contexts, d_text, stream) = arena.get_device_pointers();
+        
+        // Launch kernel asynchronously - NO SYNC!
+        let result = unsafe {
+            ffi::launch_unified_kernel_async(
+                self.slots,
+                self.header as *mut _,
+                d_contexts,
+                d_text,
+                n_messages,
+                0,  // disable metrics for now
+                stream as *mut std::ffi::c_void,
+            )
+        };
+        
+        if result != 0 {
+            return Err(format!("Async kernel launch failed: {}", result));
         }
         
-        // Pack messages into arena
-        arena.pack_messages(contexts)?;
-        
-        // Upload to device asynchronously
-        arena.upload_to_device_async()?;
-        
-        // Launch kernel asynchronously
-        arena.launch_kernel_async(self.slots, self.header as *mut _, enable_metrics)?;
-        
-        // NO SYNCHRONIZATION - return immediately!
+        // Return immediately - kernel runs in background!
         Ok(())
     }
     
