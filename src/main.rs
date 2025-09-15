@@ -95,7 +95,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("CPU messages produced in {:?}", start.elapsed());
-    thread::sleep(Duration::from_millis(100));
+    
+    // Wait for consumer to process all CPU messages
+    thread::sleep(Duration::from_millis(200));
+    println!("Waiting for consumer to process CPU messages...");
 
     // Test 2: CUDA Simple Test Kernel
     #[cfg(feature = "cuda")]
@@ -109,7 +112,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => println!("CUDA test failed: {}", e),
         }
 
-        thread::sleep(Duration::from_millis(100));
+        // Wait for GPU kernel to complete and consumer to process
+        thread::sleep(Duration::from_millis(300));
+        println!("Waiting for GPU test messages to be consumed...");
     }
 
     // Test 3: AI Agent Streaming Simulation
@@ -147,28 +152,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => println!("Agent processing failed: {}", e),
         }
 
-        thread::sleep(Duration::from_millis(200));
+        // Wait for agent messages to be processed
+        thread::sleep(Duration::from_millis(400));
+        println!("Waiting for agent messages to be consumed...");
     }
 
     // Test 4: Throughput test
     println!("\n4. Throughput Test");
     println!("------------------");
+    println!("Note: Running controlled throughput test with backpressure");
     let start = Instant::now();
     let mut produced = 0u64;
+    let mut backpressure_count = 0u64;
 
-    while start.elapsed() < Duration::from_secs(2) {
+    while start.elapsed() < Duration::from_secs(1) {  // Reduced to 1 second for safer test
         let msg = format!("Throughput test {}", produced);
-        if producer.try_produce(msg.as_bytes()).is_ok() {
-            produced += 1;
-        } else {
-            // Buffer full, wait a bit
-            thread::sleep(Duration::from_micros(10));
+        match producer.try_produce(msg.as_bytes()) {
+            Ok(_) => produced += 1,
+            Err("Buffer full - backpressure") => {
+                backpressure_count += 1;
+                // Buffer full, wait for consumer
+                thread::sleep(Duration::from_micros(100));
+            }
+            Err(_) => {
+                // Other error, wait a bit
+                thread::sleep(Duration::from_micros(50));
+            }
         }
     }
 
     let elapsed = start.elapsed();
     let throughput = produced as f64 / elapsed.as_secs_f64();
     println!("Produced {} messages in {:?}", produced, elapsed);
+    println!("Backpressure events: {}", backpressure_count);
     println!("Throughput: {:.0} messages/second", throughput);
 
     // Stop consumer and wait
