@@ -121,7 +121,7 @@ impl<'a> Producer<'a> {
         Ok(())
     }
     
-    /// CPU based produce
+    /// CPU based produce with proper backpressure
     pub fn try_produce(&mut self, data: &[u8]) -> Result<u64, &'static str> {
         if data.len() > 240 {
             return Err("Payload too large");
@@ -129,8 +129,19 @@ impl<'a> Producer<'a> {
 
         unsafe {
             let header = &*self.header;
+            
+            // CRITICAL: Check if we're about to lap the consumer
+            let write_idx = header.producer.write_idx.load(Ordering::Acquire);
+            let read_idx = header.consumer.read_idx.load(Ordering::Acquire);
+            let n_slots = header.config.slot_count as u64;
+            
+            // Prevent producer from overrunning consumer
+            // Leave 64 slots as safety margin
+            if (write_idx - read_idx) >= (n_slots - 64) {
+                return Err("Buffer full - backpressure");
+            }
 
-            // Check for backpressure
+            // Check for explicit backpressure signal
             if header.control.backpressure.load(Ordering::Acquire) != 0 {
                 return Err("Backpressure active");
             }
