@@ -39,6 +39,7 @@
 //! - `spsc`: Producer and consumer implementations
 //! - `gpu_arena`: GPU-optimized text arena allocator (CUDA only)
 
+#[cfg(feature = "cuda")]
 mod device;
 pub mod ffi;
 pub mod header;
@@ -48,6 +49,7 @@ pub mod spsc;
 #[cfg(feature = "cuda")]
 pub mod gpu_arena;
 
+#[cfg(feature = "cuda")]
 pub use device::DeviceBuffer;
 pub use ffi::*;
 pub use header::Header;

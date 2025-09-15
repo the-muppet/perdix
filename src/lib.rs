@@ -81,6 +81,7 @@
 //! requirements and error codes.
 
 pub mod buffer;
+#[cfg(feature = "cuda")]
 pub mod runtime;
 pub mod pty;
 
@@ -100,4 +101,5 @@ pub use buffer::{Buffer, Consumer, Header, Producer, Slot};
 #[cfg(feature = "cuda")]
 pub use gpu::GpuProducer;
 
+#[cfg(feature = "cuda")]
 pub use runtime::{CudaFunction, CudaModule, CudaRuntimeCompiler, PerdixRuntime};

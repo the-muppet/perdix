@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use perdix::{Buffer, AgentType};
+use perdix::Buffer;
 use std::time::Duration;
 
 fn benchmark_single_message(c: &mut Criterion) {
@@ -13,7 +13,7 @@ fn benchmark_single_message(c: &mut Criterion) {
             let data = vec![b'A'; size];
             
             b.iter(|| {
-                producer.try_produce(&data, AgentType::Assistant);
+                let _ = producer.try_produce(&data);
                 black_box(consumer.try_consume());
             });
         });
@@ -36,7 +36,7 @@ fn benchmark_batch_messages(c: &mut Criterion) {
             b.iter(|| {
                 // Produce batch
                 for _ in 0..batch_size {
-                    producer.try_produce(data, AgentType::Info);
+                    let _ = producer.try_produce(data);
                 }
                 
                 // Consume batch
@@ -64,7 +64,7 @@ fn benchmark_sustained_throughput(c: &mut Criterion) {
         b.iter(|| {
             // Produce 1MB of data
             for _ in 0..chunks_per_mb {
-                producer.try_produce(&chunk, AgentType::Assistant);
+                let _ = producer.try_produce(&chunk);
             }
             
             // Consume all
