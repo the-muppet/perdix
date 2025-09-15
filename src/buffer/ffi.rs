@@ -1,5 +1,6 @@
 use crate::buffer::header::Header;
 use crate::buffer::slot::Slot;
+use crate::buffer::gpu_arena::PackedStreamContext;
 use std::os::raw::c_int;
 
 // Agent types matching CUDA kernel
