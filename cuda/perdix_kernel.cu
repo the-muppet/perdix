@@ -84,6 +84,18 @@ struct StreamContext {
     uint8_t _pad[2];
 };
 
+// GPU-friendly packed context using offsets instead of pointers
+struct PackedStreamContext {
+    uint32_t text_offset;       // Offset into text arena buffer
+    uint32_t text_len;          // Length of text
+    AgentType agent_type;       // Type of agent
+    uint32_t stream_id;         // Stream identifier
+    uint64_t timestamp;         // Message timestamp
+    bool is_continuation;       // Part of multi-part message
+    bool enable_ansi;          // Enable ANSI formatting
+    uint8_t _pad[2];
+};
+
 // Performance metrics for profiling
 struct KernelMetrics {
     uint64_t cycles_start;
@@ -595,7 +607,67 @@ extern "C" int init_unified_buffer(
     return 0;
 }
 
-// Main kernel launcher
+// Async kernel launcher with packed contexts and text arena
+extern "C" int launch_unified_kernel_async(
+    Slot* slots,
+    Header* hdr,
+    const PackedStreamContext* d_packed_contexts,  // Already on device
+    const uint8_t* d_text_arena,                   // Already on device
+    uint32_t n_messages,
+    int enable_metrics,
+    cudaStream_t stream
+) {
+    // NO cudaDeviceSynchronize() here!
+    
+    // Get device properties for optimal configuration
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    
+    // Calculate launch configuration
+    const int threads_per_block = 128;
+    const int payload_size = 192;
+    
+    int blocks;
+    if (n_messages <= prop.multiProcessorCount * threads_per_block) {
+        blocks = (n_messages + threads_per_block - 1) / threads_per_block;
+    } else {
+        blocks = prop.multiProcessorCount * 2;
+    }
+    blocks = min(blocks, prop.multiProcessorCount * 4);
+    
+    // Calculate shared memory
+    size_t shared_mem_size = threads_per_block * payload_size +
+                           threads_per_block * sizeof(uint64_t);
+    
+    // Allocate metrics if needed
+    KernelMetrics* d_metrics = nullptr;
+    if (enable_metrics) {
+        cudaMallocAsync(&d_metrics, blocks * sizeof(KernelMetrics), stream);
+    }
+    
+    // Launch kernel asynchronously
+    dim3 grid(blocks);
+    dim3 block(threads_per_block);
+    
+    // Note: We'll need to create a new kernel that takes packed contexts
+    // For now, this is the structure
+    // unified_stream_kernel_packed<<<grid, block, shared_mem_size, stream>>>(
+    //     slots, hdr, d_packed_contexts, d_text_arena, n_messages, d_metrics, enable_metrics
+    // );
+    
+    // Check only for LAUNCH errors (not execution)
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
+        if (d_metrics) cudaFreeAsync(d_metrics, stream);
+        return -1;
+    }
+    
+    // NO SYNCHRONIZATION - return immediately for true streaming
+    return 0;
+}
+
+// Main kernel launcher (legacy - keep for compatibility)
 extern "C" int launch_unified_kernel(
     Slot* slots,
     Header* hdr,
@@ -832,6 +904,36 @@ extern "C" int launch_simple_test(
     
     printf("Test kernel completed successfully\n");
     return 0;
+}
+
+// CUDA stream management functions for async operations
+extern "C" int cuda_create_stream(cudaStream_t* stream) {
+    return cudaStreamCreate(stream);
+}
+
+extern "C" int cuda_stream_destroy(cudaStream_t stream) {
+    return cudaStreamDestroy(stream);
+}
+
+extern "C" int cuda_stream_synchronize(cudaStream_t stream) {
+    return cudaStreamSynchronize(stream);
+}
+
+extern "C" int cuda_stream_query(cudaStream_t stream) {
+    return cudaStreamQuery(stream);
+}
+
+extern "C" int cuda_malloc_async(void** ptr, size_t size, cudaStream_t stream) {
+    return cudaMallocAsync(ptr, size, stream);
+}
+
+extern "C" int cuda_free_async(void* ptr, cudaStream_t stream) {
+    return cudaFreeAsync(ptr, stream);
+}
+
+extern "C" int cuda_memcpy_async(void* dst, const void* src, size_t size, 
+                                 cudaMemcpyKind kind, cudaStream_t stream) {
+    return cudaMemcpyAsync(dst, src, size, kind, stream);
 }
 
 // Cleanup function

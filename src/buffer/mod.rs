@@ -4,12 +4,16 @@ pub mod header;
 pub mod pinned;
 pub mod slot;
 pub mod spsc;
+#[cfg(feature = "cuda")]
+pub mod gpu_arena;
 
 pub use device::DeviceBuffer;
 pub use ffi::*;
 pub use header::Header;
 pub use slot::Slot;
 pub use spsc::{Consumer, Producer};
+#[cfg(feature = "cuda")]
+pub use gpu_arena::{GpuTextArena, PackedStreamContext};
 
 pub use self::pinned::Pinned;
 use std::ptr;

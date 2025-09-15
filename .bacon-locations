@@ -3,5 +3,5 @@ warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:
 warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:65:8	function `cuMemAllocHost` is never used
 warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:148:5	fields `pinned_ref` and `pinned_arc` are never read
 warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:12:5	fields `pinned_ref` and `pinned_arc` are never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:24:5	field `stream` is never read
+warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:28:5	field `stream` is never read
 warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\jit.rs:113:9	unused variable: `agent_types`
