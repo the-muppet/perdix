@@ -242,6 +242,11 @@ impl<'a> Consumer<'a> {
 
             // Check if slot is ready
             if slot_seq != self.read_seq {
+                // Debug: print mismatch for first few attempts
+                if self.read_seq < 25 {
+                    println!("[Consumer] Seq mismatch at idx {}: expected {}, got {} (slot addr={:p})", 
+                             idx, self.read_seq, slot_seq, slot as *const _);
+                }
                 return None;
             }
 
@@ -251,6 +256,13 @@ impl<'a> Consumer<'a> {
             // Read slot data
             let len = ptr::read_volatile(&slot.len) as usize;
             let flags = ptr::read_volatile(&slot.flags);
+
+            // Bounds check to prevent allocation errors
+            if len > 240 {
+                // Slot appears corrupted - skip it
+                println!("[Consumer] WARNING: Corrupted slot at seq={}, len={}", slot_seq, len);
+                return None;
+            }
 
             // Copy payload
             let mut payload = vec![0u8; len];

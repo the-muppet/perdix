@@ -105,21 +105,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         println!("\n2. CUDA Test Kernel");
         println!("--------------------");
+        
+        // IMPORTANT: Wait for consumer to fully drain before GPU test
+        thread::sleep(Duration::from_millis(500));
+        
         let start = Instant::now();
 
         match producer.run_test(50) {
             Ok(_) => println!("CUDA test kernel completed in {:?}", start.elapsed()),
             Err(e) => println!("CUDA test failed: {}", e),
         }
+        
+        // Immediately check what's in the slots after kernel completes
+        // Note: Can't access private fields, so we'll rely on kernel output
 
-        // Wait for GPU kernel to complete and consumer to process
-        thread::sleep(Duration::from_millis(300));
-        println!("Waiting for GPU test messages to be consumed...");
+        // Wait much longer for GPU kernel to complete and consumer to process
+        println!("\nWaiting for GPU test messages to be consumed...");
+        thread::sleep(Duration::from_secs(1));
     }
 
-    // Test 3: AI Agent Streaming Simulation
+    // Test 3: AI Agent Streaming Simulation - DISABLED FOR ISOLATION
     #[cfg(feature = "cuda")]
-    {
+    if false {  // DISABLED to isolate GPU test
         println!("\n3. AI Agent Streaming");
         println!("----------------------");
 
@@ -157,17 +164,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Waiting for agent messages to be consumed...");
     }
 
-    // Test 4: Throughput test
-    println!("\n4. Throughput Test");
-    println!("------------------");
-    println!("Note: Running controlled throughput test with backpressure");
-    let start = Instant::now();
-    let mut produced = 0u64;
-    let mut backpressure_count = 0u64;
+    // Test 4: Throughput test - DISABLED FOR ISOLATION
+    if false {  // DISABLED to isolate GPU test
+        println!("\n4. Throughput Test");
+        println!("------------------");
+        println!("Note: Running controlled throughput test with backpressure");
+        let start = Instant::now();
+        let mut produced = 0u64;
+        let mut backpressure_count = 0u64;
 
-    while start.elapsed() < Duration::from_secs(1) {  // Reduced to 1 second for safer test
-        let msg = format!("Throughput test {}", produced);
-        match producer.try_produce(msg.as_bytes()) {
+        while start.elapsed() < Duration::from_secs(1) {  // Reduced to 1 second for safer test
+            let msg = format!("Throughput test {}", produced);
+            match producer.try_produce(msg.as_bytes()) {
             Ok(_) => produced += 1,
             Err("Buffer full - backpressure") => {
                 backpressure_count += 1;
@@ -181,11 +189,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let elapsed = start.elapsed();
-    let throughput = produced as f64 / elapsed.as_secs_f64();
-    println!("Produced {} messages in {:?}", produced, elapsed);
-    println!("Backpressure events: {}", backpressure_count);
-    println!("Throughput: {:.0} messages/second", throughput);
+        let elapsed = start.elapsed();
+        let throughput = produced as f64 / elapsed.as_secs_f64();
+        println!("Produced {} messages in {:?}", produced, elapsed);
+        println!("Backpressure events: {}", backpressure_count);
+        println!("Throughput: {:.0} messages/second", throughput);
+    }  // Close the disabled block
 
     // Stop consumer and wait
     println!("\n=== Shutting down ===");
