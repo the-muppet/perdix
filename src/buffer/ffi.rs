@@ -64,6 +64,16 @@ extern "C" {
     ) -> c_int;
 
     pub fn launch_simple_test(slots: *mut Slot, hdr: *mut Header, n_msgs: c_int) -> c_int;
+    
+    pub fn launch_unified_kernel_async(
+        slots: *mut Slot,
+        hdr: *mut Header,
+        packed_contexts: *const PackedStreamContext,
+        text_arena: *const u8,
+        n_messages: u32,
+        enable_metrics: i32,
+        stream: *mut std::ffi::c_void,
+    ) -> c_int;
 
     pub fn cleanup_unified_buffer(slots: *mut Slot, hdr: *mut Header) -> c_int;
 }
