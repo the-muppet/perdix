@@ -1,10 +1,10 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize, MasterPty, Child, PtyPair};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize, MasterPty, Child};
 use std::io::{Write, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use crate::buffer::{Consumer, Message};
+use crate::buffer::Consumer;
 
 /// Cross-platform PTY writer using portable-pty
 pub struct PortablePtyWriter {
@@ -57,7 +57,7 @@ impl PortablePtyWriter {
                 // Try to consume messages from ring buffer
                 if let Some(msg) = consumer.try_consume() {
                     // Write to PTY
-                    if let Err(e) = writer.write_all(&msg.payload[..msg.len as usize]) {
+                    if let Err(e) = writer.write_all(&msg.payload) {
                         println!("[PTY Writer] Write error: {}", e);
                         break;
                     }
@@ -178,7 +178,7 @@ impl ZeroCopyPortablePty {
             
             // Write batch to PTY
             for msg in &batch {
-                if let Err(e) = writer.write_all(&msg.payload[..msg.len as usize]) {
+                if let Err(e) = writer.write_all(&msg.payload) {
                     println!("[PTY Stream] Write error: {}", e);
                     return total;
                 }

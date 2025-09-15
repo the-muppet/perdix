@@ -16,10 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 # CUDA driver API bindings
-cust = { version = "0.3.2", optional = true }        
-# writev, ioctl, pty handling
-nix = { version = "0.30.1", optional = true }       
-portable-pty = { version = "0.9.0", optional = false }
+cust = { version = "0.3.2", optional = true }             
+portable-pty = "0.9.0"
 # safe packed structs for slots
 zerocopy = "0.8.27"    
 # cast [u8] ↔ struct
@@ -34,4 +32,3 @@ cc = "1"
 [features]
 default = []
 cuda = ["cust"]       # GPU path
-pty = ["nix"]

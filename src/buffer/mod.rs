@@ -11,7 +11,7 @@ pub use device::DeviceBuffer;
 pub use ffi::*;
 pub use header::Header;
 pub use slot::Slot;
-pub use spsc::{Consumer, Producer};
+pub use spsc::{Consumer, Producer, Message};
 #[cfg(feature = "cuda")]
 pub use gpu_arena::{GpuTextArena, PackedStreamContext};
 
