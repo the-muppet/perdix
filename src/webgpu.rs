@@ -95,32 +95,32 @@ impl WebGpuProducer {
         }
         
         // Create slot data
-        let mut slot = Slot {
-            seq,
-            len: data.len() as u32,
-            flags: 0,
-            _pad1: 0,
-            payload: [0; 240],
-            _pad2: [0; 8],
-        };
-        slot.payload[..data.len()].copy_from_slice(data);
+        // We need to create slot data manually as fields are private
+        let mut slot_data = vec![0u8; std::mem::size_of::<Slot>()];
+        
+        // Write seq (8 bytes at offset 0)
+        slot_data[0..8].copy_from_slice(&seq.to_le_bytes());
+        
+        // Write len (4 bytes at offset 8)
+        slot_data[8..12].copy_from_slice(&(data.len() as u32).to_le_bytes());
+        
+        // Write flags (4 bytes at offset 12)
+        slot_data[12..16].copy_from_slice(&0u32.to_le_bytes());
+        
+        // Skip _pad1 (4 bytes at offset 16)
+        
+        // Write payload (240 bytes starting at offset 20)
+        slot_data[20..20 + data.len()].copy_from_slice(data);
         
         // Calculate slot index
         let slot_idx = (seq as usize) & (self.n_slots - 1);
         let offset = slot_idx * std::mem::size_of::<Slot>();
         
         // Write to GPU buffer
-        // Convert slot to bytes manually since we can't use bytemuck
-        let slot_bytes = unsafe {
-            std::slice::from_raw_parts(
-                &slot as *const Slot as *const u8,
-                std::mem::size_of::<Slot>(),
-            )
-        };
         self.queue.write_buffer(
             &self.ring_buffer,
             offset as u64,
-            slot_bytes,
+            &slot_data,
         );
         
         // Submit commands
