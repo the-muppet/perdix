@@ -234,6 +234,9 @@ impl<'a> Consumer<'a> {
             let idx = (self.read_seq & self.wrap_mask) as usize;
             let slot = &*self.slots.add(idx);
 
+            // Memory fence before reading for cross-device visibility
+            std::sync::atomic::fence(Ordering::Acquire);
+
             // Use volatile read for unified memory
             let slot_seq = ptr::read_volatile(&slot.seq);
 
@@ -241,6 +244,9 @@ impl<'a> Consumer<'a> {
             if slot_seq != self.read_seq {
                 return None;
             }
+
+            // Memory fence after sequence check
+            std::sync::atomic::fence(Ordering::Acquire);
 
             // Read slot data
             let len = ptr::read_volatile(&slot.len) as usize;
