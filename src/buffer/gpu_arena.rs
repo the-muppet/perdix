@@ -201,6 +201,52 @@ impl GpuTextArena {
     pub fn stream(&self) -> *mut c_void {
         self.stream
     }
+    
+    /// Add a single text message to the arena
+    pub fn add_text(&mut self, text: &[u8], agent_type: AgentType) -> Result<(), String> {
+        if self.current_offset + text.len() > self.capacity {
+            return Err("Arena capacity exceeded".to_string());
+        }
+        
+        let packed = PackedStreamContext {
+            text_offset: self.current_offset as u32,
+            text_len: text.len() as u32,
+            agent_type,
+            stream_id: 0,
+            timestamp: 0,
+            is_continuation: false,
+            enable_ansi: true,
+            _pad: [0; 2],
+        };
+        
+        self.host_text.extend_from_slice(text);
+        self.host_contexts.push(packed);
+        self.current_offset += text.len();
+        
+        Ok(())
+    }
+    
+    /// Get the packed contexts and text data
+    pub fn pack(&self) -> (&[PackedStreamContext], &[u8]) {
+        (&self.host_contexts, &self.host_text)
+    }
+    
+    /// Upload packed data to device
+    pub fn upload_to_device(
+        &mut self,
+        contexts: &[PackedStreamContext],
+        text_data: &[u8],
+    ) -> Result<(), String> {
+        // Use the async version internally
+        self.host_contexts = contexts.to_vec();
+        self.host_text = text_data.to_vec();
+        self.upload_to_device_async()
+    }
+    
+    /// Get device pointers for kernel launch
+    pub fn get_device_pointers(&self) -> (*const PackedStreamContext, *const u8, *mut c_void) {
+        (self.device_contexts, self.device_text, self.stream)
+    }
 }
 
 impl Drop for GpuTextArena {
