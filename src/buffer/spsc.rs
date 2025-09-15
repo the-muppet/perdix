@@ -84,7 +84,7 @@ impl<'a> Producer<'a> {
                 contexts.as_ptr(),
                 contexts.len() as u32,
                 enable_metrics as i32,
-                stream,
+                stream as *mut std::ffi::c_void,  // Convert u64 to pointer for cudaStream_t
             )
         };
 

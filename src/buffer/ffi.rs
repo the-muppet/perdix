@@ -60,7 +60,7 @@ extern "C" {
         contexts: *const StreamContext,
         n_messages: u32,
         enable_metrics: i32,
-        stream: u64,
+        stream: *mut std::ffi::c_void,  // cudaStream_t is a pointer type
     ) -> c_int;
 
     pub fn launch_simple_test(slots: *mut Slot, hdr: *mut Header, n_msgs: c_int) -> c_int;

@@ -612,12 +612,30 @@ extern "C" int launch_unified_kernel(
         if (device < 0) return -1;
     }
     
+    // Copy contexts to device memory if needed
+    StreamContext* d_contexts = nullptr;
+    if (n_messages > 0 && contexts) {
+        size_t contexts_size = n_messages * sizeof(StreamContext);
+        err = cudaMalloc(&d_contexts, contexts_size);
+        if (err != cudaSuccess) {
+            printf("Failed to allocate device memory for contexts: %s\n", cudaGetErrorString(err));
+            return -1;
+        }
+        
+        err = cudaMemcpy(d_contexts, contexts, contexts_size, cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) {
+            printf("Failed to copy contexts to device: %s\n", cudaGetErrorString(err));
+            cudaFree(d_contexts);
+            return -1;
+        }
+    }
+    
     // Get device properties for optimal configuration
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, device);
     
     // Calculate optimal launch configuration
-    const int threads_per_block = 224;  // Reduced from 256 to fit shared memory  // 8 warps
+    const int threads_per_block = 128;  // Reduced to ensure shared memory fits
     const int payload_size = 192;
     
     // Dynamic grid sizing based on workload and SM count
@@ -660,19 +678,41 @@ extern "C" int launch_unified_kernel(
     cudaMemPrefetchAsync(hdr, header_size, device, stream);
     cudaMemPrefetchAsync(slots, slots_size, device, stream);
     
+    // Validate parameters before launch
+    if (!slots || !hdr) {
+        printf("Error: Invalid slots or header pointer\n");
+        if (d_metrics) cudaFree(d_metrics);
+        return -1;
+    }
+    
+    if (n_messages > 0 && !contexts) {
+        printf("Error: Invalid contexts pointer for %u messages\n", n_messages);
+        if (d_metrics) cudaFree(d_metrics);
+        return -1;
+    }
+    
     // Launch kernel
     dim3 grid(blocks);
     dim3 block(threads_per_block);
     
-    unified_stream_kernel<<<grid, block, shared_mem_size, stream>>>(
-        slots, hdr, contexts, n_messages, d_metrics, enable_metrics
+    // Use default stream if null pointer passed
+    cudaStream_t kernel_stream = stream ? stream : 0;
+    
+    // Use device contexts for kernel launch
+    unified_stream_kernel<<<grid, block, shared_mem_size, kernel_stream>>>(
+        slots, hdr, d_contexts ? d_contexts : contexts, n_messages, d_metrics, enable_metrics
     );
     
     // Check for launch errors
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
+        printf("  Grid: %d blocks, Block: %d threads\n", blocks, threads_per_block);
+        printf("  Shared memory: %zu bytes\n", shared_mem_size);
+        printf("  Pointers - slots: %p, hdr: %p, contexts: %p, metrics: %p\n", 
+               slots, hdr, d_contexts ? d_contexts : contexts, d_metrics);
         if (d_metrics) cudaFree(d_metrics);
+        if (d_contexts) cudaFree(d_contexts);
         return -1;
     }
     
@@ -681,6 +721,7 @@ extern "C" int launch_unified_kernel(
     if (err != cudaSuccess) {
         printf("Kernel execution failed: %s\n", cudaGetErrorString(err));
         if (d_metrics) cudaFree(d_metrics);
+        if (d_contexts) cudaFree(d_contexts);
         return -1;
     }
     
@@ -712,6 +753,11 @@ extern "C" int launch_unified_kernel(
         
         delete[] h_metrics;
         cudaFree(d_metrics);
+    }
+    
+    // Clean up device contexts
+    if (d_contexts) {
+        cudaFree(d_contexts);
     }
     
     return 0;
