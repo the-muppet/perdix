@@ -115,7 +115,7 @@ impl<'a> Producer<'a> {
         arena.upload_to_device_async()?;
         
         // Launch kernel asynchronously
-        arena.launch_kernel_async(self.slots, self.header, enable_metrics)?;
+        arena.launch_kernel_async(self.slots, self.header as *mut _, enable_metrics)?;
         
         // NO SYNCHRONIZATION - return immediately!
         Ok(())
