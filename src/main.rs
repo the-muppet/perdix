@@ -301,7 +301,7 @@ fn run_claude_mode(n_slots: usize) -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Spawn the process
-    let child = pair.slave.spawn_command(cmd)?;
+    let mut child = pair.slave.spawn_command(cmd)?;
     println!("Process launched with PID: {:?}", child.process_id());
     
     // Set up reader from PTY master
@@ -407,7 +407,7 @@ fn run_claude_mode(n_slots: usize) -> Result<(), Box<dyn std::error::Error>> {
     // Wait for process to exit or user interrupt
     println!("\nProcess running. Press Ctrl+C to stop.\n");
     
-    // Wait for child process
+    // Wait for child process  
     match child.wait() {
         Ok(status) => println!("\nProcess exited with: {:?}", status),
         Err(e) => println!("\nError waiting for process: {}", e),

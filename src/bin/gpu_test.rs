@@ -137,13 +137,17 @@ fn run_async_gpu_test(producer: &mut Producer, n_messages: u32) -> Result<(), Bo
         arena.add_text(text.as_bytes(), agent_type)?;
     }
     
-    // Pack and upload to GPU
+    // Pack messages and get info
     println!("  Packing {} messages into arena...", n_messages);
-    let (packed_contexts, text_data) = arena.pack();
+    let (num_contexts, num_bytes) = {
+        let (packed_contexts, text_data) = arena.pack();
+        (packed_contexts.len(), text_data.len())
+    };
     
-    println!("  Uploading to GPU ({} bytes text, {} contexts)...", 
-             text_data.len(), packed_contexts.len());
-    arena.upload_to_device(&packed_contexts, &text_data)?;
+    println!("  Uploading to GPU ({} bytes text, {} contexts)...", num_bytes, num_contexts);
+    
+    // Now we can upload without borrow issues since the refs are dropped
+    arena.upload_to_device_async()?;
     
     // Launch async kernel - returns immediately!
     let start = Instant::now();

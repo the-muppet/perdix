@@ -28,7 +28,7 @@ impl PortablePtyWriter {
         })?;
         
         // Spawn a shell
-        let mut cmd = CommandBuilder::new(if cfg!(windows) { "cmd.exe" } else { "bash" });
+        let cmd = CommandBuilder::new(if cfg!(windows) { "cmd.exe" } else { "bash" });
         let child = pair.slave.spawn_command(cmd)?;
         
         println!("PTY created with shell PID: {:?}", child.process_id());
@@ -88,7 +88,7 @@ impl PortablePtyWriter {
     }
     
     /// Start a reader thread that echoes PTY output to console
-    pub fn start_reader_thread(mut self) -> thread::JoinHandle<()> {
+    pub fn start_reader_thread(self) -> thread::JoinHandle<()> {
         thread::spawn(move || {
             let mut reader = self.master.try_clone_reader().unwrap();
             let mut buffer = [0u8; 4096];
@@ -138,7 +138,7 @@ impl ZeroCopyPortablePty {
         })?;
         
         // Spawn shell
-        let mut cmd = CommandBuilder::new(if cfg!(windows) { "powershell.exe" } else { "bash" });
+        let cmd = CommandBuilder::new(if cfg!(windows) { "powershell.exe" } else { "bash" });
         let child = pair.slave.spawn_command(cmd)?;
         
         Ok(Self {
