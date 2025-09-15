@@ -1,7 +1,7 @@
+use crate::buffer::{Header, Slot};
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::buffer::{Header, Slot};
 
 pub struct CpuProducer {
     header: *mut Header,
@@ -28,47 +28,50 @@ impl CpuProducer {
             delay_ms,
         }
     }
-    
+
     pub fn produce_messages(&mut self, n_msgs: u64) {
         let start = Instant::now();
-        
+
         for i in 0..n_msgs {
             // Reserve sequence number atomically (mimics GPU atomicAdd)
             let seq = unsafe {
-                (*self.header).producer.write_idx.fetch_add(1, Ordering::AcqRel)
+                (*self.header)
+                    .producer
+                    .write_idx
+                    .fetch_add(1, Ordering::AcqRel)
             };
-            
+
             // Calculate slot index with wrap-around
             let slot_idx = (seq & unsafe { (*self.header).config.wrap_mask }) as usize;
-            
+
             // Write to slot
             unsafe {
                 let slot = &mut *self.slots.add(slot_idx);
-                
+
                 // Create test payload
                 let payload_str = format!("CPU Message #{:04} [seq={}]", i, seq);
                 let payload_bytes = payload_str.as_bytes();
                 let len = payload_bytes.len().min(192);
-                
+
                 // Copy payload
                 slot.payload[..len].copy_from_slice(&payload_bytes[..len]);
                 // Write non-atomic fields using volatile writes for unified memory
                 std::ptr::write_volatile(&mut slot.len, len as u32);
                 std::ptr::write_volatile(&mut slot.flags, 0);
-                
+
                 // Memory fence equivalent (ensures write visibility)
                 std::sync::atomic::fence(Ordering::Release);
-                
+
                 // Publish sequence number (slot is ready)
                 // Publish sequence using volatile write
                 std::ptr::write_volatile(&mut slot.seq, seq);
             }
-            
+
             // Optional delay to simulate processing time
             if let Some(delay) = self.delay_ms {
                 thread::sleep(Duration::from_millis(delay));
             }
-            
+
             // Progress indicator every 1000 messages
             if i > 0 && i % 1000 == 0 {
                 let elapsed = start.elapsed();
@@ -76,7 +79,7 @@ impl CpuProducer {
                 println!("CPU Producer: {} messages, {:.0} msg/s", i, rate);
             }
         }
-        
+
         let elapsed = start.elapsed();
         println!(
             "CPU Producer: Completed {} messages in {:.2}s ({:.0} msg/s)",
@@ -97,7 +100,7 @@ pub fn start_cpu_producer(
     // Convert pointers to usize to make them Send
     let header_addr = header as usize;
     let slots_addr = slots as usize;
-    
+
     thread::spawn(move || {
         // Reconstruct pointers inside the thread
         let header = header_addr as *mut Header;
@@ -118,12 +121,7 @@ pub struct BatchCpuProducer {
 unsafe impl Send for BatchCpuProducer {}
 
 impl BatchCpuProducer {
-    pub fn new(
-        header: *mut Header,
-        slots: *mut Slot,
-        n_slots: usize,
-        batch_size: usize,
-    ) -> Self {
+    pub fn new(header: *mut Header, slots: *mut Slot, n_slots: usize, batch_size: usize) -> Self {
         Self {
             header,
             slots,
@@ -131,55 +129,62 @@ impl BatchCpuProducer {
             batch_size,
         }
     }
-    
+
     pub fn produce_batch(&mut self, n_msgs: u64) {
         let start = Instant::now();
         let mut messages_produced = 0u64;
-        
+
         while messages_produced < n_msgs {
             let batch_count = (n_msgs - messages_produced).min(self.batch_size as u64);
-            
+
             // Reserve sequence numbers for entire batch atomically
             let base_seq = unsafe {
-                (*self.header).producer.write_idx.fetch_add(batch_count, Ordering::AcqRel)
+                (*self.header)
+                    .producer
+                    .write_idx
+                    .fetch_add(batch_count, Ordering::AcqRel)
             };
-            
+
             // Write batch of messages
             for i in 0..batch_count {
                 let seq = base_seq + i;
                 let slot_idx = (seq & unsafe { (*self.header).config.wrap_mask }) as usize;
-                
+
                 unsafe {
                     let slot = &mut *self.slots.add(slot_idx);
-                    
+
                     // Create payload
-                    let payload_str = format!("Batch CPU #{:04} [seq={}]", messages_produced + i, seq);
+                    let payload_str =
+                        format!("Batch CPU #{:04} [seq={}]", messages_produced + i, seq);
                     let payload_bytes = payload_str.as_bytes();
                     let len = payload_bytes.len().min(192);
-                    
+
                     slot.payload[..len].copy_from_slice(&payload_bytes[..len]);
                     // Write non-atomic fields using volatile writes
                     std::ptr::write_volatile(&mut slot.len, len as u32);
                     std::ptr::write_volatile(&mut slot.flags, 0x100); // Mark as batch-produced
-                    
+
                     // Memory fence
                     std::sync::atomic::fence(Ordering::Release);
-                    
+
                     // Publish sequence using volatile write
                     std::ptr::write_volatile(&mut slot.seq, seq);
                 }
             }
-            
+
             messages_produced += batch_count;
-            
+
             // Progress update
             if messages_produced % 10000 == 0 {
                 let elapsed = start.elapsed();
                 let rate = messages_produced as f64 / elapsed.as_secs_f64();
-                println!("Batch CPU Producer: {} messages, {:.0} msg/s", messages_produced, rate);
+                println!(
+                    "Batch CPU Producer: {} messages, {:.0} msg/s",
+                    messages_produced, rate
+                );
             }
         }
-        
+
         let elapsed = start.elapsed();
         println!(
             "Batch CPU Producer: Completed {} messages in {:.2}s ({:.0} msg/s)",
@@ -200,11 +205,11 @@ pub fn start_parallel_cpu_producer(
 ) -> Vec<thread::JoinHandle<()>> {
     let msgs_per_thread = n_msgs / n_threads as u64;
     let remainder = n_msgs % n_threads as u64;
-    
+
     // Convert pointers to usize for thread safety
     let header_addr = header as usize;
     let slots_addr = slots as usize;
-    
+
     (0..n_threads)
         .map(|thread_id| {
             let header_addr = header_addr;
@@ -215,12 +220,15 @@ pub fn start_parallel_cpu_producer(
             } else {
                 msgs_per_thread
             };
-            
+
             thread::spawn(move || {
                 let header = header_addr as *mut Header;
                 let slots = slots_addr as *mut Slot;
                 let mut producer = CpuProducer::new(header, slots, n_slots, None);
-                println!("CPU Producer thread {} starting, producing {} messages", thread_id, thread_msgs);
+                println!(
+                    "CPU Producer thread {} starting, producing {} messages",
+                    thread_id, thread_msgs
+                );
                 producer.produce_messages(thread_msgs);
                 println!("CPU Producer thread {} completed", thread_id);
             })

@@ -11,6 +11,7 @@ pub struct JITRuntime {
     init_kernel: CudaFunction,
     test_kernel: CudaFunction,
     ansi_kernel: Option<CudaFunction>,
+    unified_kernel: Option<CudaFunction>,
     buffer: Buffer,
 }
 
@@ -25,13 +26,13 @@ impl JITRuntime {
 
         // Create compiler
         let compiler = CudaRuntimeCompiler::new(device_id)?;
-        
+
         // Get kernel source
         let source = crate::runtime::kernel_source::get_kernel_source(None);
-        
+
         // Compile to PTX
         let ptx = compiler.compile_to_ptx(&source, "perdix_kernels", "compute_89")?;
-        
+
         // Load the compiled module
         let module = compiler.load_ptx_module(&ptx)?;
 
@@ -39,29 +40,31 @@ impl JITRuntime {
         let test_kernel = module.get_function("perdix_test_kernel")?;
         let init_kernel = module.get_function("perdix_init_kernel")?;
         let ansi_kernel = module.get_function("perdix_ansi_kernel").ok();
+        let unified_kernel = module.get_function("unified_stream_kernel").ok();
 
         // The Buffer now handles the CUDA initialization and allocation.
         // It returns a single object managing one contiguous block of memory.
         let buffer = Buffer::new(n_slots)?;
-        
+
         println!("Initializing ring buffer with CUDA kernel...");
         let (header_ptr, slots_ptr) = buffer.as_raw_parts();
-        
+
         let mut params = crate::runtime::cuda_params::CudaParams::new();
         params.add_device_ptr(slots_ptr as *mut _);
         params.add_device_ptr(header_ptr as *mut _);
         params.add_i32(n_slots as i32);
-        
+
         init_kernel.launch((1, 1, 1), (1, 1, 1), 0, params.as_kernel_params())?;
-        
+
         println!("Perdix Runtime initialized successfully!");
-        
+
         Ok(Self {
             compiler,
             module,
             init_kernel,
             test_kernel,
             ansi_kernel,
+            unified_kernel,
             buffer,
         })
     }
@@ -72,58 +75,56 @@ impl JITRuntime {
         let (_prod_ref, cons_ref) = self.buffer.split_mut();
         cons_ref
     }
-    
+
     /// Get the raw buffer pointers for launching kernels
     pub fn get_raw_pointers(&self) -> (*mut crate::buffer::Header, *mut crate::buffer::Slot) {
         self.buffer.as_raw_parts()
     }
-    
+
     /// Get a reference to the test kernel
     pub fn test_kernel(&self) -> &CudaFunction {
         &self.test_kernel
     }
-    
+
     /// Get a reference to the ANSI kernel if available
     pub fn ansi_kernel(&self) -> Option<&CudaFunction> {
         self.ansi_kernel.as_ref()
     }
-    
+
     /// Run the test kernel with a specified number of messages
     pub fn run_test(&mut self, n_messages: usize) -> Result<(), Box<dyn std::error::Error>> {
         let (header_ptr, slots_ptr) = self.buffer.as_raw_parts();
-        
+
         let mut params = crate::runtime::cuda_params::CudaParams::new();
         params.add_device_ptr(slots_ptr as *mut _);
         params.add_device_ptr(header_ptr as *mut _);
         params.add_i32(n_messages as i32);
-        
-        self.test_kernel.launch(
-            (1, 1, 1),
-            (256, 1, 1),
-            0,
-            params.as_kernel_params(),
-        )?;
-        
+
+        self.test_kernel
+            .launch((1, 1, 1), (256, 1, 1), 0, params.as_kernel_params())?;
+
         Ok(())
     }
-    
+
     /// Run the ANSI kernel with formatted messages
     pub fn run_ansi_kernel(
         &mut self,
         messages: &[String],
         agent_types: &[u32],
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let ansi_kernel = self.ansi_kernel.as_ref()
+        let ansi_kernel = self
+            .ansi_kernel
+            .as_ref()
             .ok_or("ANSI kernel not available")?;
-        
+
         let (header_ptr, slots_ptr) = self.buffer.as_raw_parts();
-        
+
         // Prepare message data
         let mut params = crate::runtime::cuda_params::CudaParams::new();
         params.add_device_ptr(slots_ptr as *mut _);
         params.add_device_ptr(header_ptr as *mut _);
         params.add_i32(messages.len() as i32);
-        
+
         // For now, we'll use the test kernel as ANSI processing would require
         // uploading the message strings to device memory
         ansi_kernel.launch(
@@ -132,49 +133,99 @@ impl JITRuntime {
             0,
             params.as_kernel_params(),
         )?;
-        
+
         Ok(())
     }
-    
+
+    /// Run the unified stream kernel for processing agent responses
+    pub fn run_unified_kernel(
+        &mut self,
+        contexts: &[crate::buffer::StreamContext],
+        enable_metrics: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let unified_kernel = self
+            .unified_kernel
+            .as_ref()
+            .ok_or("Unified stream kernel not available")?;
+
+        let (header_ptr, slots_ptr) = self.buffer.as_raw_parts();
+
+        // Calculate optimal launch configuration
+        const THREADS_PER_BLOCK: u32 = 224; // Reduced for shared memory
+        let n_messages = contexts.len() as u32;
+        let blocks = ((n_messages + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK).min(64);
+
+        // Calculate shared memory size
+        const PAYLOAD_SIZE: usize = 192;
+        let shared_mem_size = (THREADS_PER_BLOCK as usize) * PAYLOAD_SIZE
+            + (THREADS_PER_BLOCK as usize) * std::mem::size_of::<u64>();
+
+        // Prepare kernel parameters
+        let mut params = crate::runtime::cuda_params::CudaParams::new();
+        params.add_device_ptr(slots_ptr as *mut _);
+        params.add_device_ptr(header_ptr as *mut _);
+        params.add_device_ptr(contexts.as_ptr() as *mut _);
+        params.add_i32(n_messages as i32);
+        params.add_device_ptr(std::ptr::null_mut::<std::ffi::c_void>()); // metrics pointer (null for now)
+        params.add_i32(if enable_metrics { 1 } else { 0 });
+
+        // Launch kernel
+        unified_kernel.launch(
+            (blocks, 1, 1),
+            (THREADS_PER_BLOCK, 1, 1),
+            shared_mem_size as u32,
+            params.as_kernel_params(),
+        )?;
+
+        Ok(())
+    }
+
     /// Verify that messages were correctly written to the buffer
-    pub fn verify_messages(&mut self, expected_count: usize) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn verify_messages(
+        &mut self,
+        expected_count: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut consumer = self.get_consumer();
         let messages = consumer.consume_available(Some(expected_count));
-        
+
         if messages.len() != expected_count {
             return Err(format!(
                 "Expected {} messages, got {}",
                 expected_count,
                 messages.len()
-            ).into());
+            )
+            .into());
         }
-        
+
         Ok(())
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_runtime_initialization() {
         let runtime = JITRuntime::new(0, 1024);
-        assert!(runtime.is_ok(), "Failed to initialize runtime: {:?}", runtime.err());
+        assert!(
+            runtime.is_ok(),
+            "Failed to initialize runtime: {:?}",
+            runtime.err()
+        );
     }
-    
+
     #[test]
     fn test_basic_messaging() {
         let mut runtime = JITRuntime::new(0, 1024).expect("Failed to create runtime");
         let result = runtime.run_test(100);
         assert!(result.is_ok(), "Test failed: {:?}", result.err());
     }
-    
+
     #[test]
     fn test_ansi_messages() {
         let mut runtime = JITRuntime::new(0, 1024).expect("Failed to create runtime");
-        
+
         let messages = vec![
             "System starting up".to_string(),
             "User logged in".to_string(),
@@ -182,14 +233,16 @@ mod tests {
             "ERROR: Connection failed".to_string(),
             "WARNING: Low memory".to_string(),
         ];
-        
+
         // Agent types: 0=SYSTEM, 1=USER, 2=ASSISTANT, 3=ERROR, 4=WARNING, 5=INFO, 6=DEBUG, 7=TRACE
-        let agent_types = vec![0, 1, 2, 3, 4, 5, 6, 7]; 
+        let agent_types = vec![0, 1, 2, 3, 4, 5, 6, 7];
 
         let result = runtime.run_ansi_kernel(&messages, &agent_types);
         assert!(result.is_ok(), "ANSI test failed: {:?}", result.err());
-        
+
         // Verify messages
-        runtime.verify_messages(messages.len()).expect("Failed to verify messages");
+        runtime
+            .verify_messages(messages.len())
+            .expect("Failed to verify messages");
     }
 }

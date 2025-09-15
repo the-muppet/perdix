@@ -11,10 +11,10 @@ pub mod gpu;
 pub mod cpu;
 
 // Re-export key types
-pub use buffer::{Buffer, Consumer, Producer, Header, Slot};
 pub use buffer::ffi::{AgentType, StreamContext};
+pub use buffer::{Buffer, Consumer, Header, Producer, Slot};
 
 #[cfg(feature = "cuda")]
 pub use gpu::GpuProducer;
 
-pub use runtime::{CudaRuntimeCompiler, CudaModule, CudaFunction, PerdixRuntime};
+pub use runtime::{CudaFunction, CudaModule, CudaRuntimeCompiler, PerdixRuntime};

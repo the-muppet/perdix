@@ -1,17 +1,17 @@
 mod device;
+pub mod ffi;
 pub mod header;
 pub mod pinned;
 pub mod slot;
 pub mod spsc;
-pub mod ffi;
 
+pub use device::DeviceBuffer;
+pub use ffi::*;
 pub use header::Header;
 pub use slot::Slot;
 pub use spsc::{Consumer, Producer};
-pub use device::DeviceBuffer; 
-pub use ffi::*;
 
-use self::pinned::Pinned;
+pub use self::pinned::Pinned;
 use std::ptr;
 
 /// The primary owner of the shared GPU-CPU ring buffer.
@@ -41,7 +41,11 @@ impl Buffer {
         let mut header_ptr: *mut Header = ptr::null_mut();
 
         let result = unsafe {
-            ffi::init_unified_buffer(&mut slots_ptr, &mut header_ptr, n_slots as std::os::raw::c_int)
+            ffi::init_unified_buffer(
+                &mut slots_ptr,
+                &mut header_ptr,
+                n_slots as std::os::raw::c_int,
+            )
         };
 
         if result != 0 || header_ptr.is_null() || slots_ptr.is_null() {
@@ -90,9 +94,9 @@ impl Buffer {
         // at a time), but since our Producer and Consumer operate on raw pointers
         // internally and we guarantee they don't conflict, this is a safe
         // abstraction. We can achieve this by using raw pointers.
-        
+
         let pinned_ptr = &mut self.pinned as *mut Pinned;
-        
+
         // SAFETY: We are creating two structs that hold references derived from
         // the same mutable borrow of `self`. This is safe because the Producer
         // and Consumer are designed to never access the same memory locations

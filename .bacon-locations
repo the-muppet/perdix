@@ -1,15 +1,7 @@
-warning	C:\Users\rprat\projects\daedalus\perdix\src\cpu.rs:118:5	field `n_slots` is never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:65:8	function `cuMemFreeHost` is never used
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:64:8	function `cuMemAllocHost` is never used
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:143:5	fields `pinned_ref` and `pinned_arc` are never read
+warning	C:\Users\rprat\projects\daedalus\perdix\src\main.rs:1:17	unused imports: `AgentType` and `StreamContext`
+warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:66:8	function `cuMemFreeHost` is never used
+warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:65:8	function `cuMemAllocHost` is never used
+warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:148:5	fields `pinned_ref` and `pinned_arc` are never read
 warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:12:5	fields `pinned_ref` and `pinned_arc` are never read
 warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:24:5	field `stream` is never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\cpu.rs:175:21	unnecessary `unsafe` block
-warning	C:\Users\rprat\projects\daedalus\perdix\src\cpu.rs:166:21	unnecessary `unsafe` block
-warning	C:\Users\rprat\projects\daedalus\perdix\src\cpu.rs:66:17	unnecessary `unsafe` block
-warning	C:\Users\rprat\projects\daedalus\perdix\src\cpu.rs:56:17	unnecessary `unsafe` block
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:6:5	unused import: `crate::buffer::pinned::Pinned`
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:4:5	unused import: `std::sync::Arc`
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\slot.rs:2:25	unused import: `AtomicU32`
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\slot.rs:1:11	unused import: `mem`
-warning	C:\Users\rprat\projects\daedalus\perdix\build.rs:227:9	unused variable: `obj_path`
+warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\jit.rs:113:9	unused variable: `agent_types`

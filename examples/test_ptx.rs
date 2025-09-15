@@ -1,9 +1,9 @@
-use perdixlib::runtime::{CudaRuntimeCompiler, CudaModule, CudaFunction};
+use perdixlib::runtime::{CudaFunction, CudaModule, CudaRuntimeCompiler};
 
 fn main() {
     println!("Testing PTX Runtime Compilation");
     println!("================================");
-    
+
     // Simple CUDA kernel source
     let kernel_source = r#"
 extern "C" __global__ void test_kernel(int* output, int n) {
@@ -18,18 +18,18 @@ extern "C" __global__ void test_kernel(int* output, int n) {
     match CudaRuntimeCompiler::new(0) {
         Ok(compiler) => {
             println!("✓ CUDA runtime compiler initialized");
-            
+
             // Try to compile to PTX
             match compiler.compile_to_ptx(kernel_source, "test_kernel", "compute_89") {
                 Ok(ptx) => {
                     println!("✓ Kernel compiled to PTX successfully");
                     println!("PTX size: {} bytes", ptx.len());
-                    
+
                     // Try to load the PTX module
                     match compiler.load_ptx_module(&ptx) {
                         Ok(module) => {
                             println!("✓ PTX module loaded successfully");
-                            
+
                             // Try to get the kernel function
                             match module.get_function("test_kernel") {
                                 Ok(func) => {

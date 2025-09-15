@@ -1,6 +1,6 @@
-use std::os::raw::c_int;
 use crate::buffer::header::Header;
 use crate::buffer::slot::Slot;
+use std::os::raw::c_int;
 
 // Agent types matching CUDA kernel
 #[repr(u8)]
@@ -47,13 +47,13 @@ impl StreamContext {
 
 extern "C" {
     pub fn cuda_init_device(device_id: c_int) -> c_int;
-    
+
     pub fn init_unified_buffer(
         slots: *mut *mut Slot,
         hdr: *mut *mut Header,
         n_slots: c_int,
     ) -> c_int;
-    
+
     pub fn launch_unified_kernel(
         slots: *mut Slot,
         hdr: *mut Header,
@@ -63,14 +63,7 @@ extern "C" {
         stream: u64,
     ) -> c_int;
 
-    pub fn launch_simple_test(
-        slots: *mut Slot,
-        hdr: *mut Header,
-        n_msgs: c_int,
-    ) -> c_int;
-    
-    pub fn cleanup_unified_buffer(
-        slots: *mut Slot,
-        hdr: *mut Header,
-    ) -> c_int;
+    pub fn launch_simple_test(slots: *mut Slot, hdr: *mut Header, n_msgs: c_int) -> c_int;
+
+    pub fn cleanup_unified_buffer(slots: *mut Slot, hdr: *mut Header) -> c_int;
 }

@@ -1,5 +1,5 @@
-use std::os::raw::c_void;
 use crate::runtime::CompilerError;
+use std::os::raw::c_void;
 
 /// Device memory buffer
 pub struct DeviceBuffer {
@@ -29,7 +29,11 @@ impl DeviceBuffer {
         }
 
         unsafe {
-            let result = crate::runtime::runtime_compiler::cuMemcpyHtoD(self.ptr, data.as_ptr() as *const c_void, data.len());
+            let result = crate::runtime::runtime_compiler::cuMemcpyHtoD(
+                self.ptr,
+                data.as_ptr() as *const c_void,
+                data.len(),
+            );
             if result != crate::runtime::runtime_compiler::CUDA_SUCCESS {
                 return Err(CompilerError::CudaError(format!(
                     "Failed to copy to device: {}",
@@ -47,7 +51,11 @@ impl DeviceBuffer {
         }
 
         unsafe {
-            let result = crate::runtime::runtime_compiler::cuMemcpyDtoH(data.as_mut_ptr() as *mut c_void, self.ptr, data.len());
+            let result = crate::runtime::runtime_compiler::cuMemcpyDtoH(
+                data.as_mut_ptr() as *mut c_void,
+                self.ptr,
+                data.len(),
+            );
             if result != crate::runtime::runtime_compiler::CUDA_SUCCESS {
                 return Err(CompilerError::CudaError(format!(
                     "Failed to copy from device: {}",

@@ -1,6 +1,6 @@
-use std::ptr;
-use crate::buffer::{Header, Slot};
 use crate::buffer::ffi;
+use crate::buffer::{Header, Slot};
+use std::ptr;
 
 /// A safe RAII wrapper around the CUDA unified memory buffer.
 ///
@@ -21,7 +21,6 @@ pub struct Pinned {
 unsafe impl Send for Pinned {}
 unsafe impl Sync for Pinned {}
 
-
 impl Pinned {
     /// Allocates a new unified memory ring buffer using the CUDA API.
     pub fn new(n_slots: usize) -> Result<Self, String> {
@@ -40,7 +39,10 @@ impl Pinned {
         let mut header_ptr: *mut Header = ptr::null_mut();
         let mut slots_ptr: *mut Slot = ptr::null_mut();
 
-        println!("[Buffer] Allocating unified buffer with {} slots...", n_slots);
+        println!(
+            "[Buffer] Allocating unified buffer with {} slots...",
+            n_slots
+        );
 
         // Call the C function to perform the allocation.
         let result = unsafe {
@@ -70,7 +72,7 @@ impl Pinned {
     pub fn as_header(&self) -> *mut Header {
         self.header
     }
-    
+
     /// Alias for as_header for consistency
     #[inline]
     pub fn header(&self) -> *mut Header {
@@ -82,7 +84,7 @@ impl Pinned {
     pub fn as_slots(&self) -> *mut Slot {
         self.slots
     }
-    
+
     /// Alias for as_slots for consistency
     #[inline]
     pub fn slots_ptr(&self) -> *mut Slot {

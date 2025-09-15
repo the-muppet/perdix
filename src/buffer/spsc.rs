@@ -1,10 +1,10 @@
 // spsc.rs
 use std::ptr;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
-use crate::buffer::{pinned::Pinned, Header, Slot};
 use crate::buffer::ffi::{self, StreamContext};
+use crate::buffer::{pinned::Pinned, Header, Slot};
 
 /// Producer handle for writing to the ring buffer.
 pub struct Producer<'a> {
@@ -12,7 +12,7 @@ pub struct Producer<'a> {
     pinned_ref: Option<&'a Pinned>,
     // ...or an Arc for owned, thread-safe handles.
     pinned_arc: Option<Arc<Pinned>>,
-    
+
     // Direct pointers for performance in the hot path
     header: *const Header,
     slots: *mut Slot,
@@ -25,7 +25,7 @@ impl<'a> Producer<'a> {
         let header_ptr = arc_pinned.header() as *const Header;
         let slots_ptr = arc_pinned.slots_ptr();
         let wrap_mask = unsafe { (*header_ptr).config.wrap_mask };
-        
+
         Self {
             pinned_ref: None,
             pinned_arc: Some(arc_pinned),
@@ -73,8 +73,10 @@ impl<'a> Producer<'a> {
         enable_metrics: bool,
         stream: u64, // Pass the stream explicitly
     ) -> Result<(), String> {
-        if contexts.is_empty() { return Ok(()); }
-        
+        if contexts.is_empty() {
+            return Ok(());
+        }
+
         let result = unsafe {
             ffi::launch_unified_kernel(
                 self.slots,
@@ -97,38 +99,41 @@ impl<'a> Producer<'a> {
         if data.len() > 240 {
             return Err("Payload too large");
         }
-        
+
         unsafe {
             let header = &*self.header;
-            
+
             // Check for backpressure
             if header.control.backpressure.load(Ordering::Acquire) != 0 {
                 return Err("Backpressure active");
             }
-            
+
             // Reserve sequence number
             let seq = header.producer.write_idx.fetch_add(1, Ordering::AcqRel);
-            
+
             // Get slot
             let idx = (seq & self.wrap_mask) as usize;
             let slot = &mut *self.slots.add(idx);
-            
+
             // Write payload
             ptr::copy_nonoverlapping(data.as_ptr(), slot.payload.as_mut_ptr(), data.len());
             // Use volatile writes for unified memory
             ptr::write_volatile(&mut slot.len, data.len() as u32);
             ptr::write_volatile(&mut slot.flags, 0);
-            
+
             // Memory fence for cross-device visibility
             std::sync::atomic::fence(Ordering::Release);
-            
+
             // Publish sequence
             ptr::write_volatile(&mut slot.seq, seq);
             std::sync::atomic::fence(Ordering::Release);
-            
+
             // Update stats
-            header.producer.messages_produced.fetch_add(1, Ordering::Relaxed);
-            
+            header
+                .producer
+                .messages_produced
+                .fetch_add(1, Ordering::Relaxed);
+
             Ok(seq)
         }
     }
@@ -142,12 +147,12 @@ unsafe impl<'a> Sync for Producer<'a> {}
 pub struct Consumer<'a> {
     pinned_ref: Option<&'a Pinned>,
     pinned_arc: Option<Arc<Pinned>>,
-    
+
     // Direct pointers for performance
     header: *const Header,
     slots: *const Slot,
     wrap_mask: u64,
-    
+
     // Consumer state
     read_seq: u64,
 }
@@ -158,7 +163,7 @@ impl<'a> Consumer<'a> {
         let header_ptr = arc_pinned.header() as *const Header;
         let slots_ptr = arc_pinned.slots_ptr() as *const Slot;
         let wrap_mask = unsafe { (*header_ptr).config.wrap_mask };
-        
+
         Self {
             pinned_ref: None,
             pinned_arc: Some(arc_pinned),
@@ -190,28 +195,34 @@ impl<'a> Consumer<'a> {
         unsafe {
             let idx = (self.read_seq & self.wrap_mask) as usize;
             let slot = &*self.slots.add(idx);
-            
+
             // Use volatile read for unified memory
             let slot_seq = ptr::read_volatile(&slot.seq);
-            
+
             // Check if slot is ready
             if slot_seq != self.read_seq {
                 return None;
             }
-            
+
             // Read slot data
             let len = ptr::read_volatile(&slot.len) as usize;
             let flags = ptr::read_volatile(&slot.flags);
-            
+
             // Copy payload
             let mut payload = vec![0u8; len];
             ptr::copy_nonoverlapping(slot.payload.as_ptr(), payload.as_mut_ptr(), len);
-            
+
             // Update read index
             self.read_seq += 1;
-            (*self.header).consumer.read_idx.store(self.read_seq, Ordering::Release);
-            (*self.header).consumer.messages_consumed.fetch_add(1, Ordering::Relaxed);
-            
+            (*self.header)
+                .consumer
+                .read_idx
+                .store(self.read_seq, Ordering::Release);
+            (*self.header)
+                .consumer
+                .messages_consumed
+                .fetch_add(1, Ordering::Relaxed);
+
             Some(Message {
                 seq: slot_seq,
                 payload,
@@ -223,7 +234,7 @@ impl<'a> Consumer<'a> {
     /// Consume up to max_messages from the buffer.
     pub fn consume_batch(&mut self, max_messages: usize) -> Vec<Message> {
         let mut messages = Vec::with_capacity(max_messages);
-        
+
         for _ in 0..max_messages {
             if let Some(msg) = self.try_consume() {
                 messages.push(msg);
@@ -231,7 +242,7 @@ impl<'a> Consumer<'a> {
                 break;
             }
         }
-        
+
         messages
     }
 
@@ -239,14 +250,14 @@ impl<'a> Consumer<'a> {
     pub fn consume_blocking(&mut self, timeout_ms: u64) -> Option<Message> {
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_millis(timeout_ms);
-        
+
         while start.elapsed() < timeout {
             if let Some(msg) = self.try_consume() {
                 return Some(msg);
             }
             std::thread::yield_now();
         }
-        
+
         None
     }
 
@@ -274,13 +285,13 @@ impl<'a> Consumer<'a> {
         unsafe {
             let header = &*self.header;
             let write_idx = header.producer.write_idx.load(Ordering::Acquire);
-            
+
             // Calculate how many we can consume
             let available = (write_idx - self.read_seq) as usize;
             let max_to_check = limit.unwrap_or(available).min(available);
-            
+
             let mut messages = Vec::with_capacity(max_to_check);
-            
+
             for _ in 0..max_to_check {
                 if let Some(msg) = self.try_consume() {
                     messages.push(msg);
@@ -289,7 +300,7 @@ impl<'a> Consumer<'a> {
                     break;
                 }
             }
-            
+
             messages
         }
     }

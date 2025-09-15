@@ -1,17 +1,16 @@
-
 use crate::buffer::spsc::Consumer;
+use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use std::io::{self, Write};
 
-#[cfg(unix)]
-use std::os::unix::io::AsRawFd;
 #[cfg(feature = "pty")]
 use nix::pty::{self, PtyMaster};
 #[cfg(feature = "pty")]
 use smallvec::{smallvec, SmallVec};
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
 
 pub struct PtyFlusher {
     #[cfg(feature = "pty")]
@@ -41,7 +40,10 @@ impl PtyFlusher {
         pty::unlockpt(&pty_master).unwrap();
 
         let slave_name = pty::ptsname_r(&pty_master).unwrap();
-        println!("[PTY Flusher] PTY slave device is available at: {}", slave_name);
+        println!(
+            "[PTY Flusher] PTY slave device is available at: {}",
+            slave_name
+        );
         println!("[PTY Flusher] In another terminal, run: cat {}", slave_name);
 
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -66,7 +68,7 @@ impl PtyFlusher {
 
         while !self.stop_flag.load(Ordering::Acquire) {
             iovecs.clear();
-            
+
             // Collect a batch of available spans
             while iovecs.len() < iovecs.capacity() {
                 if let Some(payload_slice) = self.consumer.consume_slice_and_advance() {
@@ -90,10 +92,13 @@ impl PtyFlusher {
 
                 if result < 0 {
                     // Handle error, e.g., if the PTY reader disconnects.
-                    eprintln!("[PTY Flusher] writev error: {}", std::io::Error::last_os_error());
+                    eprintln!(
+                        "[PTY Flusher] writev error: {}",
+                        std::io::Error::last_os_error()
+                    );
                     break;
                 }
-                
+
                 // After a successful write, commit the read index.
                 // This lets the GPU producer know these slots can be reused.
                 self.consumer.commit_read();

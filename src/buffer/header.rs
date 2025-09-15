@@ -6,55 +6,55 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 pub struct Header {
     // Producer cache line (64 bytes) - hot for GPU
     pub producer: ProducerSection,
-    
+
     // Consumer cache line (64 bytes) - hot for CPU
     pub consumer: ConsumerSection,
-    
+
     // Configuration cache line (64 bytes) - read-only after init
     pub config: ConfigSection,
-    
+
     // Control cache line (64 bytes) - infrequent access
     pub control: ControlSection,
 }
 
 #[repr(C)]
 pub struct ProducerSection {
-    pub write_idx: AtomicU64,       // 8 bytes
+    pub write_idx: AtomicU64,         // 8 bytes
     pub messages_produced: AtomicU64, // 8 bytes
-    _pad: [u8; 48],                  // 48 bytes padding to 64
+    _pad: [u8; 48],                   // 48 bytes padding to 64
 }
 
 #[repr(C)]
 pub struct ConsumerSection {
-    pub read_idx: AtomicU64,         // 8 bytes
+    pub read_idx: AtomicU64,          // 8 bytes
     pub messages_consumed: AtomicU64, // 8 bytes
-    _pad: [u8; 48],                  // 48 bytes padding to 64
+    _pad: [u8; 48],                   // 48 bytes padding to 64
 }
 
 #[repr(C)]
 pub struct ConfigSection {
-    pub wrap_mask: u64,              // 8 bytes
-    pub slot_count: u32,             // 4 bytes
-    pub payload_size: u32,           // 4 bytes
-    pub batch_size: u32,             // 4 bytes
-    _reserved: u32,                  // 4 bytes
-    _pad: [u8; 40],                  // 40 bytes padding to 64
+    pub wrap_mask: u64,    // 8 bytes
+    pub slot_count: u32,   // 4 bytes
+    pub payload_size: u32, // 4 bytes
+    pub batch_size: u32,   // 4 bytes
+    _reserved: u32,        // 4 bytes
+    _pad: [u8; 40],        // 40 bytes padding to 64
 }
 
 #[repr(C)]
 pub struct ControlSection {
-    pub backpressure: AtomicU32,     // 4 bytes
-    pub stop: AtomicU32,             // 4 bytes
-    pub epoch: AtomicU32,            // 4 bytes
-    pub error_count: AtomicU32,      // 4 bytes
-    _pad: [u8; 48],                  // 48 bytes padding to 64
+    pub backpressure: AtomicU32, // 4 bytes
+    pub stop: AtomicU32,         // 4 bytes
+    pub epoch: AtomicU32,        // 4 bytes
+    pub error_count: AtomicU32,  // 4 bytes
+    _pad: [u8; 48],              // 48 bytes padding to 64
 }
 
 impl Header {
     /// Initialize header with default values
     pub fn new(n_slots: usize) -> Self {
         assert!(n_slots.is_power_of_two(), "n_slots must be power of 2");
-        
+
         Self {
             producer: ProducerSection {
                 write_idx: AtomicU64::new(0),
@@ -83,7 +83,7 @@ impl Header {
             },
         }
     }
-    
+
     /// Check if buffer is full (producer perspective)
     #[inline]
     pub fn is_full(&self) -> bool {
@@ -91,7 +91,7 @@ impl Header {
         let read = self.consumer.read_idx.load(Ordering::Acquire);
         (write - read) >= self.config.slot_count as u64
     }
-    
+
     /// Check if buffer is empty (consumer perspective)
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -99,7 +99,7 @@ impl Header {
         let read = self.consumer.read_idx.load(Ordering::Acquire);
         write == read
     }
-    
+
     /// Get current fill level
     #[inline]
     pub fn fill_level(&self) -> u64 {

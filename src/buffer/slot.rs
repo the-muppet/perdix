@@ -8,19 +8,19 @@ pub struct Slot {
     // Sequence number for ordering (written last by producer)
     // Using u64 directly - atomics will be handled via unsafe operations
     pub seq: u64,
-    
+
     // Payload length - using u32 directly
     pub len: u32,
-    
+
     // Flags for metadata - using u32 directly
     pub flags: u32,
-    
+
     // Padding to align payload
     _pad1: u32,
-    
+
     // Actual payload data
     pub payload: [u8; 240], // Fits in 4 cache lines total
-    
+
     // Padding to ensure alignment
     _pad2: [u8; 8],
 }
@@ -35,7 +35,7 @@ impl Slot {
             seq == expected_seq
         }
     }
-    
+
     /// Reset slot for reuse (using volatile write)
     #[inline]
     pub fn reset(&mut self) {
@@ -45,7 +45,7 @@ impl Slot {
             ptr::write_volatile(&mut self.flags, 0);
         }
     }
-    
+
     /// Atomic read of sequence (for CPU side)
     #[inline]
     pub fn read_seq_atomic(&self) -> u64 {
@@ -54,7 +54,7 @@ impl Slot {
             atomic_ref.load(Ordering::Acquire)
         }
     }
-    
+
     /// Atomic write of sequence (for CPU side)
     #[inline]
     pub fn write_seq_atomic(&self, seq: u64) {

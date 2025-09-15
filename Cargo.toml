@@ -34,5 +34,3 @@ cc = "1"
 default = []
 cuda = ["cust"]       # GPU path
 pty = ["nix"]
-gpudirect = []        # placeholder
-coop-groups = []      # placeholder

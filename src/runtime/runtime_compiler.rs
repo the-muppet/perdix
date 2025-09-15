@@ -2,9 +2,11 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 
+pub use crate::buffer::pinned::Pinned;
+
 // NVRTC FFI bindings
-#[cfg(feature = "cuda")]
-#[link(name = "nvrtc")]
+#[cfg_attr(not(feature = "cuda"), link(name = "perdix"))]
+#[cfg_attr(feature = "cuda", link(name = "nvrtc"))]
 extern "C" {
     fn nvrtcCreateProgram(
         prog: *mut *mut c_void,
@@ -30,8 +32,8 @@ extern "C" {
 }
 
 // CUDA Driver API bindings for PTX loading
-#[cfg(feature = "cuda")]
-#[link(name = "cuda")]
+#[cfg_attr(not(feature = "cuda"), link(name = "perdix"))]
+#[cfg_attr(feature = "cuda", link(name = "cuda"))]
 extern "C" {
     fn cuInit(flags: c_int) -> c_int;
     fn cuDeviceGet(device: *mut c_int, ordinal: c_int) -> c_int;
@@ -63,38 +65,6 @@ extern "C" {
     fn cuMemAllocHost(pp: *mut *mut c_void, bytesize: usize) -> c_int;
     fn cuMemFreeHost(p: *mut c_void) -> c_int;
 }
-
-// Stub implementations when CUDA is not available
-#[cfg(not(feature = "cuda"))]
-mod stubs {
-    use super::*;
-    
-    pub unsafe fn nvrtcCreateProgram(_: *mut *mut c_void, _: *const c_char, _: *const c_char, _: c_int, _: *const *const c_char, _: *const *const c_char) -> c_int { -1 }
-    pub unsafe fn nvrtcCompileProgram(_: *mut c_void, _: c_int, _: *const *const c_char) -> c_int { -1 }
-    pub unsafe fn nvrtcGetPTXSize(_: *mut c_void, _: *mut usize) -> c_int { -1 }
-    pub unsafe fn nvrtcGetPTX(_: *mut c_void, _: *mut c_char) -> c_int { -1 }
-    pub unsafe fn nvrtcDestroyProgram(_: *mut *mut c_void) -> c_int { -1 }
-    pub unsafe fn nvrtcGetErrorString(_: c_int) -> *const c_char { b"CUDA not available\0".as_ptr() as *const c_char }
-    pub unsafe fn nvrtcGetProgramLog(_: *mut c_void, _: *mut c_char) -> c_int { -1 }
-    pub unsafe fn nvrtcGetProgramLogSize(_: *mut c_void, _: *mut usize) -> c_int { -1 }
-    
-    pub unsafe fn cuInit(_: c_int) -> c_int { -1 }
-    pub unsafe fn cuDeviceGet(_: *mut c_int, _: c_int) -> c_int { -1 }
-    pub unsafe fn cuCtxCreate(_: *mut *mut c_void, _: c_int, _: c_int) -> c_int { -1 }
-    pub unsafe fn cuModuleLoadData(_: *mut *mut c_void, _: *const c_void) -> c_int { -1 }
-    pub unsafe fn cuModuleGetFunction(_: *mut *mut c_void, _: *mut c_void, _: *const c_char) -> c_int { -1 }
-    pub unsafe fn cuLaunchKernel(_: *mut c_void, _: c_int, _: c_int, _: c_int, _: c_int, _: c_int, _: c_int, _: c_int, _: *mut c_void, _: *mut *mut c_void, _: *mut *mut c_void) -> c_int { -1 }
-    pub unsafe fn cuCtxSynchronize() -> c_int { -1 }
-    pub unsafe fn cuMemAlloc(_: *mut u64, _: usize) -> c_int { -1 }
-    pub unsafe fn cuMemFree(_: u64) -> c_int { -1 }
-    pub unsafe fn cuMemcpyHtoD(_: u64, _: *const c_void, _: usize) -> c_int { -1 }
-    pub unsafe fn cuMemcpyDtoH(_: *mut c_void, _: u64, _: usize) -> c_int { -1 }
-    pub unsafe fn cuMemAllocHost(_: *mut *mut c_void, _: usize) -> c_int { -1 }
-    pub unsafe fn cuMemFreeHost(_: *mut c_void) -> c_int { -1 }
-}
-
-#[cfg(not(feature = "cuda"))]
-pub use stubs::*;
 
 // Error codes
 pub const NVRTC_SUCCESS: c_int = 0;
@@ -340,10 +310,9 @@ impl CudaFunction {
 }
 
 
-#[cfg(all(test, feature = "cuda"))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::buffer::DeviceBuffer;
 
     const SIMPLE_KERNEL: &str = r#"
 extern "C" __global__ void test_kernel(float* output, int n) {
@@ -379,7 +348,7 @@ extern "C" __global__ void test_kernel(float* output, int n) {
         // Launch kernel
         let n_i32 = n as i32;
         let params = vec![
-            buffer.as_ptr() as *mut c_void,
+            &buffer.ptr as *const _ as *mut c_void,
             &n_i32 as *const _ as *mut c_void,
         ];
         

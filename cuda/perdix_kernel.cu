@@ -644,8 +644,7 @@ extern "C" int launch_unified_kernel(
     KernelMetrics* d_metrics = nullptr;
     if (enable_metrics) {
         err = cudaMalloc(&d_metrics, blocks * sizeof(KernelMetrics));
-        if (err != cudaSuccess) { printf("Failed to allocate metrics: %s
-", cudaGetErrorString(err)); return -1; }
+        if (err != cudaSuccess) { printf("Failed to allocate metrics: %s\n", cudaGetErrorString(err)); return -1; }
         cudaMemset(d_metrics, 0, blocks * sizeof(KernelMetrics));
     }
     
