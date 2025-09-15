@@ -176,10 +176,11 @@ extern "C" {
 
     pub fn launch_simple_test(slots: *mut Slot, hdr: *mut Header, n_msgs: c_int) -> c_int;
     
+    #[cfg(feature = "cuda")]
     pub fn launch_unified_kernel_async(
         slots: *mut Slot,
         hdr: *mut Header,
-        packed_contexts: *const PackedStreamContext,
+        packed_contexts: *const crate::buffer::gpu_arena::PackedStreamContext,
         text_arena: *const u8,
         n_messages: u32,
         enable_metrics: i32,
