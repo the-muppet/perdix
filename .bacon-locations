@@ -1,7 +1,8 @@
-warning	C:\Users\rprat\projects\daedalus\perdix\src\main.rs:1:17	unused imports: `AgentType` and `StreamContext`
+warning	C:\Users\rprat\projects\daedalus\perdix\src\webgpu.rs:321:5	fields `device`, `queue`, and `n_slots` are never read
+warning	C:\Users\rprat\projects\daedalus\perdix\src\webgpu.rs:67:5	fields `device` and `header_buffer` are never read
 warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:66:8	function `cuMemFreeHost` is never used
 warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:65:8	function `cuMemAllocHost` is never used
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:186:5	fields `pinned_ref` and `pinned_arc` are never read
+warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:192:5	fields `pinned_ref` and `pinned_arc` are never read
 warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:14:5	fields `pinned_ref` and `pinned_arc` are never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:28:5	field `stream` is never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\jit.rs:113:9	unused variable: `agent_types`
+warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:98:5	field `stream` is never read
+warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:60:5	unused import: `std::ptr`

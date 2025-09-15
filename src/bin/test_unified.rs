@@ -1,4 +1,4 @@
-use perdix::{AgentType, Buffer, Consumer, Producer, StreamContext};
+use perdix::{AgentType, Buffer, StreamContext};
 use std::thread;
 use std::time::Duration;
 

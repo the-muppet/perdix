@@ -39,7 +39,24 @@ libc = "0.2"
 # build .cu with nvcc
 cc = "1"  
 
+[dev-dependencies]
+# benchmarking framework
+criterion = { version = "0.5", features = ["html_reports"] }
+
 [features]
 default = ["webgpu"]  # Default to universal GPU support
 cuda = ["cust"]       # NVIDIA GPU path
 webgpu = ["wgpu", "pollster"]  # Universal GPU path
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "latency"
+harness = false
+
+[[bench]]
+name = "gpu_vs_cpu"
+harness = false
+required-features = ["cuda"]

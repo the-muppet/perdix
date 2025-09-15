@@ -386,7 +386,7 @@ fn run_claude_mode(n_slots: usize) -> Result<(), Box<dyn std::error::Error>> {
     });
     
     // Thread to handle user input and send to PTY
-    let input_handle = thread::spawn(move || {
+    let _input_handle = thread::spawn(move || {
         let stdin = io::stdin();
         let mut line = String::new();
         

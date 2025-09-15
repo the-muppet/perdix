@@ -110,7 +110,7 @@ impl JITRuntime {
     pub fn run_ansi_kernel(
         &mut self,
         messages: &[String],
-        agent_types: &[u32],
+        _agent_types: &[u32],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let ansi_kernel = self
             .ansi_kernel

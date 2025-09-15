@@ -45,7 +45,6 @@ impl PortablePtyWriter {
         mut self,
         mut consumer: Consumer<'static>,
     ) -> (Arc<AtomicBool>, thread::JoinHandle<u64>) {
-        let stop_flag = Arc::clone(&self.stop_flag);
         let stop_flag_ret = Arc::clone(&self.stop_flag);
         
         let handle = thread::spawn(move || {

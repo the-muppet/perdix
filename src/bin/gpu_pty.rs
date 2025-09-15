@@ -3,7 +3,7 @@ use perdix::pty::portable::{PortablePtyWriter, ZeroCopyPortablePty};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╔══════════════════════════════════════════════╗");

@@ -57,6 +57,7 @@ pub use spsc::{Consumer, Producer, Message};
 pub use gpu_arena::{GpuTextArena, PackedStreamContext};
 
 pub use self::pinned::Pinned;
+use std::ptr;
 
 /// The primary owner of the shared GPU-CPU ring buffer.
 ///
