@@ -1,7 +1,5 @@
 pub mod buffer;
 pub mod runtime;
-
-#[cfg(feature = "pty")]
 pub mod pty;
 
 #[cfg(feature = "cuda")]
