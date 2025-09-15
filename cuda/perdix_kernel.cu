@@ -487,6 +487,274 @@ unified_stream_kernel(
     }
 }
 
+// ============================================================================
+// Packed Kernel Variant (GPU-friendly memory layout)
+// ============================================================================
+
+// Async kernel that uses packed contexts with text arena
+__global__ void
+unified_stream_kernel_packed(
+    Slot* __restrict__ slots,
+    Header* __restrict__ hdr,
+    const PackedStreamContext* __restrict__ contexts,  // Packed contexts with offsets
+    const uint8_t* __restrict__ text_arena,            // Contiguous text buffer
+    const uint32_t n_messages,
+    KernelMetrics* __restrict__ metrics,
+    const bool enable_metrics
+) {
+    const int BLOCK_SIZE = 128;   // Optimized for SM occupancy
+    const int PAYLOAD_SIZE = 192;
+    
+    // Thread identifiers
+    const int tid = threadIdx.x;
+    const int bid = blockIdx.x;
+    const int warp_id = tid / 32;
+    const int lane_id = tid % 32;
+    const int global_tid = bid * blockDim.x + tid;
+    
+    // Shared memory for warp-level batching
+    extern __shared__ uint8_t shared_mem[];
+    uint8_t* shared_buffer = shared_mem;
+    uint64_t* shared_seqs = reinterpret_cast<uint64_t*>(
+        &shared_mem[BLOCK_SIZE * PAYLOAD_SIZE]
+    );
+    
+    // Start metrics if enabled
+    KernelMetrics local_metrics = {};
+    if (enable_metrics && tid == 0) {
+        local_metrics.start();
+    }
+    
+    // Cooperative groups
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    
+    // Configuration
+    const uint64_t wrap_mask = hdr->config.wrap_mask;
+    const uint32_t backpressure_threshold = hdr->config.slot_count - 64;
+    
+    // Grid-stride loop for processing messages
+    for (uint32_t msg_base = bid * BLOCK_SIZE; 
+         msg_base < n_messages; 
+         msg_base += gridDim.x * BLOCK_SIZE) {
+        
+        uint32_t msg_id = msg_base + tid;
+        bool has_work = msg_id < n_messages;
+        
+        // Check for stop signal
+        if (atomicAdd((unsigned int*)&hdr->control.stop, 0) != 0) {
+            break;
+        }
+        
+        // Step 1: Warp-level cooperative sequence reservation
+        uint64_t warp_seq_base = 0;
+        uint32_t active_mask = __ballot_sync(0xFFFFFFFF, has_work);
+        
+        if (active_mask != 0) {
+            if (lane_id == __ffs(active_mask) - 1) {
+                // Leader thread reserves sequences for entire warp
+                uint32_t warp_count = __popc(active_mask);
+                
+                // Check backpressure before reservation
+                uint64_t current_write = atomicAdd((unsigned long long*)&hdr->producer.write_idx, 0ULL);
+                uint64_t current_read = atomicAdd((unsigned long long*)&hdr->consumer.read_idx, 0ULL);
+                
+                if ((current_write - current_read) < backpressure_threshold) {
+                    warp_seq_base = atomicAdd(
+                        (unsigned long long*)&hdr->producer.write_idx,
+                        (unsigned long long)warp_count
+                    );
+                    
+                    if (enable_metrics) {
+                        atomicAdd(&hdr->producer.messages_produced, warp_count);
+                    }
+                } else {
+                    // Signal backpressure
+                    atomicExch((unsigned int*)&hdr->control.backpressure, 1);
+                    __threadfence_system();
+                    has_work = false;
+                    
+                    if (enable_metrics) {
+                        local_metrics.backpressure_events++;
+                    }
+                }
+            }
+            
+            // Broadcast base sequence to all threads in warp
+            warp_seq_base = __shfl_sync(active_mask, warp_seq_base, __ffs(active_mask) - 1);
+            has_work = has_work && (warp_seq_base != 0);
+        }
+        
+        if (!has_work) {
+            // Backoff to reduce contention
+            __nanosleep(100 + (tid * 10));
+            continue;
+        }
+        
+        // Step 2: Calculate per-thread sequence number
+        uint32_t thread_offset = __popc(active_mask & ((1U << lane_id) - 1));
+        uint64_t my_seq = warp_seq_base + thread_offset;
+        shared_seqs[tid] = my_seq;
+        
+        // Step 3: Load packed context (now using offsets)
+        const PackedStreamContext& ctx = contexts[msg_id];
+        
+        // Get text pointer from arena using offset
+        const uint8_t* text = &text_arena[ctx.text_offset];
+        
+        // Step 4: Build ANSI-formatted message in shared memory
+        uint32_t shared_offset = tid * PAYLOAD_SIZE;
+        uint32_t output_len = 0;
+        
+        if (ctx.enable_ansi) {
+            // Add agent type color
+            uint8_t color_code[8];
+            uint32_t code_len;
+            get_agent_color(ctx.agent_type, color_code, code_len);
+            
+            for (uint32_t i = 0; i < code_len; i++) {
+                shared_buffer[shared_offset + output_len++] = color_code[i];
+            }
+            
+            // Add agent label
+            const char* labels[] = {
+                "[SYSTEM] ", "[USER] ", "[ASSISTANT] ", "[ERROR] ",
+                "[WARNING] ", "[INFO] ", "[DEBUG] ", "[TRACE] "
+            };
+            const char* label = labels[static_cast<uint8_t>(ctx.agent_type)];
+            for (int i = 0; label[i] != '\0' && output_len < PAYLOAD_SIZE - 4; i++) {
+                shared_buffer[shared_offset + output_len++] = label[i];
+            }
+            
+            // Reset color for content
+            add_reset_sequence(&shared_buffer[shared_offset], output_len);
+        }
+        
+        // Step 5: Process text with keyword highlighting
+        uint32_t text_to_copy = min(ctx.text_len, 
+                                    static_cast<uint32_t>(PAYLOAD_SIZE - output_len - 4));
+        
+        for (uint32_t i = 0; i < text_to_copy; i++) {
+            uint32_t pos = i;
+            bool highlighted = false;
+            
+            if (ctx.enable_ansi) {
+                // Check for ERROR keyword - now using text from arena
+                if (detect_keyword(text, pos, ctx.text_len, "ERROR", 5)) {
+                    const char* red = "\033[91m";
+                    for (int j = 0; j < 5; j++) {
+                        shared_buffer[shared_offset + output_len++] = red[j];
+                    }
+                    for (int j = 0; j < 5; j++) {
+                        shared_buffer[shared_offset + output_len++] = text[pos + j];
+                    }
+                    add_reset_sequence(&shared_buffer[shared_offset], output_len);
+                    i += 4;
+                    highlighted = true;
+                }
+                // Check for WARNING keyword
+                else if (detect_keyword(text, pos, ctx.text_len, "WARNING", 7)) {
+                    const char* yellow = "\033[93m";
+                    for (int j = 0; j < 5; j++) {
+                        shared_buffer[shared_offset + output_len++] = yellow[j];
+                    }
+                    for (int j = 0; j < 7; j++) {
+                        shared_buffer[shared_offset + output_len++] = text[pos + j];
+                    }
+                    add_reset_sequence(&shared_buffer[shared_offset], output_len);
+                    i += 6;
+                    highlighted = true;
+                }
+                // Check for SUCCESS keyword
+                else if (detect_keyword(text, pos, ctx.text_len, "SUCCESS", 7)) {
+                    const char* green = "\033[92m";
+                    for (int j = 0; j < 5; j++) {
+                        shared_buffer[shared_offset + output_len++] = green[j];
+                    }
+                    for (int j = 0; j < 7; j++) {
+                        shared_buffer[shared_offset + output_len++] = text[pos + j];
+                    }
+                    add_reset_sequence(&shared_buffer[shared_offset], output_len);
+                    i += 6;
+                    highlighted = true;
+                }
+            }
+            
+            if (!highlighted) {
+                shared_buffer[shared_offset + output_len++] = text[pos];
+            }
+            
+            if (output_len >= PAYLOAD_SIZE - 4) break;
+        }
+        
+        // Add final reset if ANSI enabled
+        if (ctx.enable_ansi && !ctx.is_continuation) {
+            add_reset_sequence(&shared_buffer[shared_offset], output_len);
+        }
+        
+        // Step 6: Synchronize shared memory
+        __syncwarp(active_mask);
+        
+        // Step 7: Compute slot index
+        uint64_t slot_idx = my_seq & wrap_mask;
+        Slot* my_slot = &slots[slot_idx];
+        
+        // Step 8: Prefetch slot for write (sm_80+)
+        #if __CUDA_ARCH__ >= 800
+        // Touch memory to bring into cache
+        volatile uint32_t dummy = my_slot->len;
+        (void)dummy;
+        #endif
+        
+        // Step 9: Write payload to global memory (vectorized)
+        if (PAYLOAD_SIZE == 192) {
+            // Optimized for 192-byte payloads
+            float4* dst = reinterpret_cast<float4*>(my_slot->payload);
+            float4* src = reinterpret_cast<float4*>(&shared_buffer[shared_offset]);
+            
+            #pragma unroll
+            for (int i = 0; i < 12; i++) {
+                dst[i] = src[i];
+            }
+        } else {
+            // Generic vectorized copy
+            vectorized_copy<uint4>(my_slot->payload,
+                                  &shared_buffer[shared_offset],
+                                  min(output_len, static_cast<uint32_t>(PAYLOAD_SIZE)));
+        }
+        
+        // Step 10: Set metadata
+        my_slot->len = min(output_len, static_cast<uint32_t>(PAYLOAD_SIZE));
+        my_slot->flags = (ctx.is_continuation ? 0x01 : 0x00) | 
+                         (static_cast<uint32_t>(ctx.agent_type) << 8) |
+                         (ctx.stream_id << 16);
+        
+        // Get timestamp if available
+        #if __CUDA_ARCH__ >= 700
+        my_slot->timestamp = clock64();
+        #else
+        my_slot->timestamp = ctx.timestamp;
+        #endif
+        
+        // Step 11: Memory fence for host visibility
+        __threadfence_system();
+        
+        // Step 12: Atomically publish sequence number (slot is ready)
+        atomicExch((unsigned long long*)&my_slot->seq, my_seq);
+        __threadfence_system();
+        
+        if (enable_metrics) {
+            local_metrics.messages_processed++;
+        }
+    }
+    
+    // Collect final metrics
+    if (enable_metrics && tid == 0) {
+        local_metrics.end();
+        metrics[bid] = local_metrics;
+    }
+}
+
 
 // ============================================================================
 // C Interface Functions
@@ -649,11 +917,10 @@ extern "C" int launch_unified_kernel_async(
     dim3 grid(blocks);
     dim3 block(threads_per_block);
     
-    // Note: We'll need to create a new kernel that takes packed contexts
-    // For now, this is the structure
-    // unified_stream_kernel_packed<<<grid, block, shared_mem_size, stream>>>(
-    //     slots, hdr, d_packed_contexts, d_text_arena, n_messages, d_metrics, enable_metrics
-    // );
+    // Launch the packed kernel variant
+    unified_stream_kernel_packed<<<grid, block, shared_mem_size, stream>>>(
+        slots, hdr, d_packed_contexts, d_text_arena, n_messages, d_metrics, enable_metrics
+    );
     
     // Check only for LAUNCH errors (not execution)
     cudaError_t err = cudaGetLastError();

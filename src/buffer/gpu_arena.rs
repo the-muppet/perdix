@@ -235,7 +235,6 @@ extern "C" {
     fn cuda_stream_destroy(stream: *mut c_void) -> i32;
     fn cuda_stream_synchronize(stream: *mut c_void) -> i32;
     fn cuda_stream_query(stream: *mut c_void) -> i32;
-    
     fn cuda_malloc_async(ptr: *mut *mut c_void, size: usize, stream: *mut c_void) -> i32;
     fn cuda_free_async(ptr: *mut c_void, stream: *mut c_void) -> i32;
     fn cuda_memcpy_async(

@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 use crate::buffer::ffi::{self, StreamContext};
 use crate::buffer::{pinned::Pinned, Header, Slot};
+#[cfg(feature = "cuda")]
+use crate::buffer::GpuTextArena;
 
 /// Producer handle for writing to the ring buffer.
 pub struct Producer<'a> {
@@ -94,6 +96,31 @@ impl<'a> Producer<'a> {
         Ok(())
     }
 
+    /// Async version using GPU text arena for true streaming
+    #[cfg(feature = "cuda")]
+    pub fn process_agent_responses_async(
+        &mut self,
+        contexts: &[StreamContext],
+        enable_metrics: bool,
+        arena: &mut GpuTextArena,
+    ) -> Result<(), String> {
+        if contexts.is_empty() {
+            return Ok(());
+        }
+        
+        // Pack messages into arena
+        arena.pack_messages(contexts)?;
+        
+        // Upload to device asynchronously
+        arena.upload_to_device_async()?;
+        
+        // Launch kernel asynchronously
+        arena.launch_kernel_async(self.slots, self.header, enable_metrics)?;
+        
+        // NO SYNCHRONIZATION - return immediately!
+        Ok(())
+    }
+    
     /// CPU based produce
     pub fn try_produce(&mut self, data: &[u8]) -> Result<u64, &'static str> {
         if data.len() > 240 {
