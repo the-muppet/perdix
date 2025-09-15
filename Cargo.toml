@@ -1,6 +1,3 @@
-[workspace]
-# Empty workspace to exclude from parent workspace
-
 [package]
 name = "perdix"
 version = "0.1.0"

@@ -1,5 +1,5 @@
 use perdix::buffer::Buffer;
-use perdix::Producer;
+use perdix::{Producer, AgentType};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
