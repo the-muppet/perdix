@@ -1,0 +1,159 @@
+use std::env;
+use std::path::PathBuf;
+use std::process::Command;
+
+fn main() {
+    // Only build CUDA code if cuda feature is enabled
+    if env::var("CARGO_FEATURE_CUDA").is_ok() {
+        build_cuda_kernels();
+    }
+}
+
+fn build_cuda_kernels() {
+    println!("cargo:rerun-if-changed=cuda/perdix_kernel.cu");
+    
+    // Detect CUDA toolkit path
+    let cuda_path = env::var("CUDA_PATH")
+        .or_else(|_| env::var("CUDA_HOME"))
+        .unwrap_or_else(|_| {
+            if cfg!(windows) {
+                // Try common Windows CUDA installation paths
+                let paths = [
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.9",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.4",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.3",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.2",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.1",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.0",
+                    "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8",
+                ];
+                paths.iter()
+                    .find(|p| std::path::Path::new(p).exists())
+                    .unwrap_or(&paths[0])
+                    .to_string()
+            } else {
+                "/usr/local/cuda".to_string()
+            }
+        });
+    
+    println!("cargo:warning=Using CUDA path: {}", cuda_path);
+    
+    let cuda_include = PathBuf::from(&cuda_path).join("include");
+    let cuda_lib = if cfg!(windows) {
+        PathBuf::from(&cuda_path).join("lib/x64")
+    } else {
+        PathBuf::from(&cuda_path).join("lib64")
+    };
+    
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_path = PathBuf::from(&out_dir);
+    
+    // Compile CUDA files directly with nvcc
+    let cuda_files = [
+        "cuda/perdix_kernel.cu"
+    ];
+    
+    for cuda_file in &cuda_files {
+        let file_stem = PathBuf::from(cuda_file)
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        
+        let output_file = if cfg!(windows) {
+            out_path.join(format!("{}.obj", file_stem))
+        } else {
+            out_path.join(format!("{}.o", file_stem))
+        };
+        
+        let mut nvcc = Command::new("nvcc");
+        nvcc.arg("-c")
+            .arg(cuda_file)
+            .arg("-o")
+            .arg(&output_file)
+            .arg(format!("-I{}", cuda_include.display()))
+            // Only target RTX 4070 for now to simplify
+            .arg("-gencode=arch=compute_89,code=sm_89");  // RTX 4070
+        
+        // Windows-specific flags - simplified
+        if cfg!(windows) {
+            nvcc.arg("-Xcompiler=/MD");
+        }
+        
+        println!("cargo:warning=Compiling {}", cuda_file);
+        let output = nvcc.output().expect("Failed to execute nvcc");
+        
+        if !output.status.success() {
+            eprintln!("nvcc stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("nvcc stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+            panic!(
+                "nvcc compilation failed for {}:\nstdout:\n{}\nstderr:\n{}",
+                cuda_file,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    
+    // Create static library from object files
+    if cfg!(windows) {
+        // Use lib.exe on Windows
+        let mut lib_cmd = Command::new("lib");
+        lib_cmd.arg("/OUT:".to_string() + &out_path.join("cuda_kernels.lib").to_str().unwrap());
+        
+        for cuda_file in &cuda_files {
+            let file_stem = PathBuf::from(cuda_file)
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            lib_cmd.arg(out_path.join(format!("{}.obj", file_stem)));
+        }
+        
+        let output = lib_cmd.output().expect("Failed to execute lib.exe");
+        if !output.status.success() {
+            panic!("lib.exe failed:\n{}", String::from_utf8_lossy(&output.stderr));
+        }
+        
+        println!("cargo:rustc-link-lib=static=cuda_kernels");
+    } else {
+        // Use ar on Linux
+        let mut ar_cmd = Command::new("ar");
+        ar_cmd.arg("rcs")
+            .arg(out_path.join("libcuda_kernels.a"));
+        
+        for cuda_file in &cuda_files {
+            let file_stem = PathBuf::from(cuda_file)
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            ar_cmd.arg(out_path.join(format!("{}.o", file_stem)));
+        }
+        
+        let output = ar_cmd.output().expect("Failed to execute ar");
+        if !output.status.success() {
+            panic!("ar failed:\n{}", String::from_utf8_lossy(&output.stderr));
+        }
+        
+        println!("cargo:rustc-link-lib=static=cuda_kernels");
+    }
+    
+    // Link CUDA runtime
+    println!("cargo:rustc-link-lib=cudart");
+    println!("cargo:rustc-link-lib=cuda");
+    
+    // Add library search paths
+    println!("cargo:rustc-link-search=native={}", out_path.display());
+    println!("cargo:rustc-link-search=native={}", cuda_lib.display());
+    
+    // Enable additional CUDA features
+    println!("cargo:rustc-cfg=cuda_arch_89");
+    println!("cargo:rustc-cfg=has_tensor_cores");
+    println!("cargo:rustc-cfg=has_rt_cores");
+}

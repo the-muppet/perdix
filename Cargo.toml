@@ -1,0 +1,38 @@
+[workspace]
+# Empty workspace to exclude from parent workspace
+
+[package]
+name = "perdix"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "perdixlib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "perdix"
+path = "src/main.rs"
+
+[dependencies]
+# CUDA driver API bindings
+cust = { version = "0.3.2", optional = true }        
+# writev, ioctl, pty handling
+nix = { version = "0.30.1", optional = true }       
+# safe packed structs for slots
+zerocopy = "0.8.27"    
+# cast [u8] ↔ struct
+bytemuck = "1.15"   
+# raw FFI types
+libc = "0.2"        
+
+[build-dependencies]
+# build .cu with nvcc
+cc = "1"  
+
+[features]
+default = []
+cuda = ["cust"]       # GPU path
+pty = ["nix"]
+gpudirect = []        # placeholder
+coop-groups = []      # placeholder
