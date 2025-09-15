@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 namespace cg = cooperative_groups;
 
@@ -1066,25 +1067,31 @@ extern "C" int launch_simple_test(
         return -1;
     }
     
-    // IMPORTANT: Synchronize to ensure kernel completes before returning
-    // This prevents race conditions with subsequent tests
-    err = cudaDeviceSynchronize();
-    if (err != cudaSuccess) {
-        printf("Test kernel execution failed: %s\n", cudaGetErrorString(err));
-        return -1;
-    }
-    
-    // DEBUG: Read back slots and header from CPU after kernel completes
-    printf("\nCPU readback after kernel sync:\n");
-    printf("Header write_idx=%llu, read_idx=%llu\n", 
-           hdr->producer.write_idx, hdr->consumer.read_idx);
-    for (int i = 20; i <= 25; i++) {
-        printf("  Slot %d: seq=%llu, len=%u, payload=", i, slots[i].seq, slots[i].len);
-        // Print first few bytes of payload
-        for (int j = 0; j < 10 && j < slots[i].len; j++) {
-            printf("%c", slots[i].payload[j]);
+    // Check if we want async mode (no synchronization)
+    const char* async_env = getenv("PERDIX_ASYNC");
+    if (async_env && strcmp(async_env, "1") == 0) {
+        printf("🚀 ASYNC mode - kernel running in background!\n");
+        // NO SYNC - return immediately for true async operation
+    } else {
+        // Default: synchronize for compatibility with tests
+        err = cudaDeviceSynchronize();
+        if (err != cudaSuccess) {
+            printf("Test kernel execution failed: %s\n", cudaGetErrorString(err));
+            return -1;
         }
-        printf("\n");
+        
+        // DEBUG: Read back slots and header from CPU after kernel completes
+        printf("\nCPU readback after kernel sync:\n");
+        printf("Header write_idx=%llu, read_idx=%llu\n", 
+               hdr->producer.write_idx, hdr->consumer.read_idx);
+        for (int i = 20; i <= 25; i++) {
+            printf("  Slot %d: seq=%llu, len=%u, payload=", i, slots[i].seq, slots[i].len);
+            // Print first few bytes of payload
+            for (int j = 0; j < 10 && j < slots[i].len; j++) {
+                printf("%c", slots[i].payload[j]);
+            }
+            printf("\n");
+        }
     }
     
     printf("Test kernel completed successfully\n");

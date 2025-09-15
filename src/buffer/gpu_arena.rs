@@ -204,7 +204,7 @@ impl GpuTextArena {
     
     /// Add a single text message to the arena
     pub fn add_text(&mut self, text: &[u8], agent_type: AgentType) -> Result<(), String> {
-        if self.current_offset + text.len() > self.capacity {
+        if self.current_offset + text.len() > self.host_text.capacity() {
             return Err("Arena capacity exceeded".to_string());
         }
         
