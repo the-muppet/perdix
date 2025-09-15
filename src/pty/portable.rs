@@ -1,10 +1,10 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize, MasterPty, Child};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize, MasterPty, Child, PtyPair};
 use std::io::{Write, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use crate::buffer::Consumer;
+use crate::buffer::{Consumer, Message};
 
 /// Cross-platform PTY writer using portable-pty
 pub struct PortablePtyWriter {
