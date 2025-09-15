@@ -166,6 +166,59 @@ impl Buffer {
         Self::new_cpu_fallback(n_slots)
     }
     
+    #[cfg(feature = "webgpu")]
+    fn new_webgpu(n_slots: usize) -> Result<Self, String> {
+        use crate::webgpu::WebGpuBuffer;
+        
+        // Create WebGPU buffer
+        let _webgpu_buffer = WebGpuBuffer::new(n_slots)?;
+        
+        // For now, fallback to CPU implementation
+        // In a full implementation, we'd map the WebGPU buffers
+        Self::new_cpu_fallback(n_slots)
+    }
+    
+    fn new_cpu_fallback(n_slots: usize) -> Result<Self, String> {
+        // Simple CPU implementation for fallback/demo
+        // This allocates regular heap memory
+        use std::alloc::{alloc_zeroed, Layout};
+        
+        let header_layout = Layout::new::<Header>();
+        let slots_layout = Layout::array::<Slot>(n_slots).map_err(|e| e.to_string())?;
+        
+        let header_ptr = unsafe {
+            let ptr = alloc_zeroed(header_layout) as *mut Header;
+            if ptr.is_null() {
+                return Err("Failed to allocate header memory".to_string());
+            }
+            // Initialize header
+            (*ptr).config.slot_count = n_slots as u32;
+            (*ptr).config.wrap_mask = (n_slots - 1) as u64;
+            (*ptr).config.payload_size = 240;
+            (*ptr).config.batch_size = 64;
+            (*ptr).producer.write_idx.store(0, std::sync::atomic::Ordering::Relaxed);
+            (*ptr).consumer.read_idx.store(0, std::sync::atomic::Ordering::Relaxed);
+            ptr
+        };
+        
+        let slots_ptr = unsafe {
+            let ptr = alloc_zeroed(slots_layout) as *mut Slot;
+            if ptr.is_null() {
+                return Err("Failed to allocate slots memory".to_string());
+            }
+            ptr
+        };
+        
+        Ok(Self {
+            pinned: Pinned {
+                header: header_ptr,
+                slots: slots_ptr,
+                n_slots,
+            },
+            stream: 0,
+        })
+    }
+    
     #[cfg(feature = "cuda")]
     fn new_cuda(n_slots: usize) -> Result<Self, String> {
         // Original CUDA initialization code

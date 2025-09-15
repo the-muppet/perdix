@@ -98,10 +98,10 @@ impl WebGpuProducer {
         let mut slot = Slot {
             seq,
             len: data.len() as u32,
-            agent_type: 0,
+            flags: 0,
             _pad1: 0,
             payload: [0; 240],
-            _pad2: [0; 4],
+            _pad2: [0; 8],
         };
         slot.payload[..data.len()].copy_from_slice(data);
         
@@ -110,10 +110,17 @@ impl WebGpuProducer {
         let offset = slot_idx * std::mem::size_of::<Slot>();
         
         // Write to GPU buffer
+        // Convert slot to bytes manually since we can't use bytemuck
+        let slot_bytes = unsafe {
+            std::slice::from_raw_parts(
+                &slot as *const Slot as *const u8,
+                std::mem::size_of::<Slot>(),
+            )
+        };
         self.queue.write_buffer(
             &self.ring_buffer,
             offset as u64,
-            bytemuck::bytes_of(&slot),
+            slot_bytes,
         );
         
         // Submit commands
