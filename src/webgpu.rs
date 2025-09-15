@@ -103,12 +103,7 @@ impl WebGpuProducer {
     /// ```
     pub async fn new_async(n_slots: usize) -> Result<Self, String> {
         // Create instance with all available backends
-        let instance = Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            dx12_shader_compiler: Default::default(),
-            flags: wgpu::InstanceFlags::empty(),
-            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
-        });
+        let instance = Instance::new(&wgpu::InstanceDescriptor::default());
         
         // Request adapter (GPU)
         let adapter = instance
@@ -118,7 +113,7 @@ impl WebGpuProducer {
                 compatible_surface: None,
             })
             .await
-            .ok_or("No suitable GPU adapter found")?;
+            .map_err(|e| format!("Failed to get GPU adapter: {}", e))?;
         
         // Get adapter info
         let info = adapter.get_info();
@@ -134,14 +129,14 @@ impl WebGpuProducer {
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
                     memory_hints: Default::default(),
-                },
-                None,
+                    trace: Default::default(),
+                }
             )
             .await
             .map_err(|e| format!("Failed to create WebGPU device: {}", e))?;
         
-        let device = Arc::new(device);
-        let queue = Arc::new(queue);
+        let device: Arc<Device> = Arc::new(device);
+        let queue: Arc<Queue> = Arc::new(queue);
         
         // Create ring buffer on GPU
         let ring_buffer_size = n_slots * std::mem::size_of::<Slot>();
@@ -375,15 +370,15 @@ impl WebGpuBuffer {
                 ..Default::default()
             })
             .await
-            .ok_or("No GPU adapter found")?;
+            .map_err(|e| format!("Failed to get GPU adapter: {}", e))?;
         
         let (device, queue) = adapter
-            .request_device(&Default::default(), None)
+            .request_device(&Default::default())
             .await
             .map_err(|e| format!("Device creation failed: {}", e))?;
         
-        let device = Arc::new(device);
-        let queue = Arc::new(queue);
+        let device: Arc<Device> = Arc::new(device);
+        let queue: Arc<Queue> = Arc::new(queue);
         
         // Create buffers
         let slots_size = n_slots * std::mem::size_of::<Slot>();
