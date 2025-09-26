@@ -1,35 +1,38 @@
 [workspace]
 members = [
     "transport",
-    # Future components:
-    # "orchestration/conductor",
-    # "terminal/renderer",
-    # "integration/bridge",
+    "terminal",
+    "perdix-kernels"
+    # Future components will go here:
+    # "orchestration/conductor",  # Multi-agent orchestrator
+    # "integration/bridge",        # Integration layer
 ]
 resolver = "2"
 
-# Workspace-wide package defaults
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
 authors = ["Your Name"]
+edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/perdix-system"
+repository = "https://github.com/yourusername/perdix"
 
-# Shared dependencies for all members
 [workspace.dependencies]
+# Shared dependencies across workspace members
 tokio = { version = "1.35", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 anyhow = "1.0"
-tracing = "0.1"
-tracing-subscriber = "0.3"
 
-# Workspace profiles
+# Profile settings for all workspace members
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
+debug = false
+
+[profile.dev]
+opt-level = 0
+debug = true
 
 [profile.bench]
 inherits = "release"

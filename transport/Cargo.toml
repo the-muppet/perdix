@@ -1,0 +1,78 @@
+[package]
+name = "transport"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "High-performance GPU-accelerated ring buffer transport layer"
+documentation = "https://docs.rs/perdix-transport"
+repository.workspace = true
+readme = "README.md"
+keywords = ["gpu", "cuda", "ring-buffer", "transport", "zero-copy"]
+categories = ["concurrency", "data-structures", "memory-management"]
+include = [
+    "src/**/*",
+    "cuda/**/*",
+    "bin/**/*",
+    "benches/**/*",
+    "examples/**/*",
+    "build.rs",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+]
+
+[lib]
+name = "transport"
+path = "src/lib.rs"
+
+[[bin]]
+name = "transport_test"
+path = "src/bin/transport_test.rs"
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+
+[dependencies]
+# CUDA driver API bindings
+cust = { version = "0.3.2", optional = true }             
+portable-pty = "0.9.0"
+# WebGPU for universal GPU support
+wgpu = { version = "26.0", optional = true }
+pollster = { version = "0.4", optional = true }  # For async runtime
+# safe packed structs for slots
+zerocopy = "0.8.27"    
+# cast [u8] ↔ struct
+bytemuck = "1.15"   
+# raw FFI types
+libc = "0.2"        
+crossterm = "0.29.0"
+serde_json = "1.0.145"
+serde = { version = "1.0.225", features = ["derive"] }
+
+[build-dependencies]
+# build .cu with nvcc
+cc = "1"  
+
+[dev-dependencies]
+# benchmarking framework
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[features]
+default = ["webgpu"]  # Default to universal GPU support
+cuda = ["cust"]       # NVIDIA GPU path
+webgpu = ["wgpu", "pollster"]  # Universal GPU path
+
+[[bench]]
+name = "performance"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+
+[badges]
+maintenance = { status = "actively-developed" }

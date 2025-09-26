@@ -1,368 +1,109 @@
-# Perdix
+# Perdix System
 
-[![Crates.io](https://img.shields.io/crates/v/perdix.svg)](https://crates.io/crates/perdix)
-[![Documentation](https://docs.rs/perdix/badge.svg)](https://docs.rs/perdix)
-[![Downloads](https://img.shields.io/crates/d/perdix.svg)](https://crates.io/crates/perdix)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust Version](https://img.shields.io/badge/rust-1.75%2B-blue.svg)](https://www.rust-lang.org)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/the-muppet/perdix/ci.yml?branch=main)](https://github.com/the-muppet/perdix/actions)
-[![dependency status](https://deps.rs/repo/github/the-muppet/perdix/status.svg)](https://deps.rs/repo/github/the-muppet/perdix)
+A multi-component system for high-performance GPU-accelerated terminal multiplexing and AI agent orchestration.
 
-High-performance GPU-accelerated ring buffer for ultra-low latency streaming between producers and consumers. Optimized for multiple AI text streaming workloads to prevent screen tearing and terminal corruption with support for NVIDIA CUDA, WebGPU, and CPU fallback.
+## Components
 
-## Overview
+### Transport Layer (`transport/perdix`)
+✅ **Status: Complete**
 
-Perdix implements a lock-free, zero-copy Single Producer Single Consumer (SPSC) ring buffer using GPU unified memory. It achieves sub-microsecond latency and multi-gigabyte throughput, making it ideal for real-time AI assistant output streaming, high-frequency data processing, and terminal multiplexing applications.
+High-performance zero-copy GPU-accelerated ring buffer for producer-consumer communication. Provides sub-microsecond latency message passing between GPU kernels and CPU consumers.
 
-**Primary Purpose**: Perdix was specifically designed to eliminate screen tearing when multiple AI agents (Claude, GPT, etc.) stream output simultaneously to the same terminal. By routing all output through a GPU-managed ring buffer with atomic operations and proper memory fencing, Perdix ensures clean, tear-free terminal rendering even with dozens of concurrent AI streams.
+- CUDA unified memory for zero-copy transfers
+- Lock-free SPSC design
+- 2-3 GB/s throughput, <1μs latency
 
-### Key Features
+### Orchestration Layer (Coming Soon)
+🚧 **Status: Planned**
 
-- **Zero-Copy Architecture**: Direct GPU-to-CPU memory access without explicit transfers
-- **Lock-Free Design**: Atomic operations ensure thread safety without mutex overhead
-- **Multi-Backend Support**: CUDA (NVIDIA), WebGPU (cross-platform), CPU fallback
-- **Production Ready**: Comprehensive error handling and recovery mechanisms
-- **Terminal Integration**: Built-in PTY support for AI-to-terminal streaming
+Multi-agent orchestrator for managing concurrent AI agents and preventing output conflicts.
 
-### Performance Metrics
+### Terminal Renderer (Coming Soon)
+🚧 **Status: Planned**
 
-| Metric | Value |
-|--------|-------|
-| Throughput | 2-3 GB/s sustained |
-| Latency | <1 microsecond GPU-to-CPU |
-| Message Rate | >10M messages/second |
-| Memory Efficiency | Cache-aligned 256-byte slots |
+High-performance terminal rendering engine optimized for handling multiple concurrent streams.
 
-## Installation
+### Integration Bridge (Coming Soon)
+🚧 **Status: Planned**
 
-### Prerequisites
+Integration layer for connecting transport, orchestration, and rendering components.
 
-#### For CUDA Support (Recommended)
-- NVIDIA GPU with Compute Capability 7.0+
-- CUDA Driver 11.0+
-- CUDA Toolkit (optional, for runtime compilation)
+## Problem Statement
 
-#### For WebGPU Support
-- Modern GPU with WebGPU support
-- Compatible graphics drivers
+When running multiple AI agents concurrently in a terminal environment, users experience:
+- Screen tearing and visual artifacts
+- "Whiplash" effects from rapid context switching
+- Infinite scrolling from uncoordinated output
+- Terminal crashes from buffer overflow
 
-### As a Dependency
+This system addresses these issues by providing:
+1. **Transport Layer**: High-performance data movement between producers and consumers
+2. **Orchestration**: Intelligent scheduling and merging of multi-agent outputs
+3. **Rendering**: Optimized terminal rendering that can handle high-throughput streams
+4. **Integration**: Seamless connection between all components
 
-Add Perdix to your `Cargo.toml`:
+## Architecture
 
-```toml
-[dependencies]
-perdix = "0.1"
-
-# Or with specific features:
-perdix = { version = "0.1", features = ["cuda"] }  # NVIDIA GPU support
-perdix = { version = "0.1", features = ["webgpu"] }  # Cross-platform GPU
+```
+┌──────────────────────────────────────────────────────┐
+│                    AI Agents (1..N)                  │
+└──────────────┬───────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────┐
+│              Orchestration Layer                      │
+│         (Scheduling, Merging, Buffering)             │
+└──────────────┬───────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────┐
+│              Transport Layer (Perdix)                 │
+│         (Zero-copy GPU↔CPU Ring Buffer)              │
+└──────────────┬───────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────┐
+│              Terminal Renderer                        │
+│         (Optimized ANSI Processing)                  │
+└──────────────┬───────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────┐
+│              Terminal Emulator                        │
+└──────────────────────────────────────────────────────┘
 ```
 
-### Building from Source
+## Building
+
+This is a Rust workspace project. Build all components with:
 
 ```bash
-# Clone the repository
-git clone https://github.com/the-muppet/perdix.git
-cd perdix
-
-# Build with CUDA support (recommended for NVIDIA GPUs)
-cargo build --release --features cuda
-
-# Build with WebGPU support (cross-platform)
-cargo build --release --features webgpu
-
-# Build with both backends
+# Build everything
 cargo build --release --all-features
+
+# Build specific component
+cargo build --release -p perdix-transport --features cuda
+
+# Run tests
+cargo test --workspace
+
+# Run benchmarks
+cargo bench --workspace
 ```
 
-## Usage
+## Development Status
 
-### Basic Example
+- ✅ Transport Layer - Complete and tested
+- 🚧 Orchestration - In design phase
+- 🚧 Terminal Renderer - In design phase
+- 🚧 Integration - In design phase
 
-```rust
-use perdix::{Buffer, AgentType};
+## Requirements
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create ring buffer with 4096 slots
-    let mut buffer = Buffer::new(4096)?;
-    
-    // Split into producer and consumer
-    let (mut producer, mut consumer) = buffer.split_mut();
-    
-    // Producer writes messages
-    producer.try_produce(b"Hello from GPU", AgentType::Assistant);
-    
-    // Consumer reads messages
-    if let Some(message) = consumer.try_consume() {
-        println!("Received: {}", message.as_str());
-    }
-    
-    Ok(())
-}
-```
-
-### Multi-threaded Example
-
-```rust
-use perdix::{Buffer, AgentType};
-use std::thread;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let buffer = Buffer::new(1024)?;
-    let (producer, consumer) = buffer.split();
-    
-    // Producer thread (could be GPU kernel)
-    let producer_handle = thread::spawn(move || {
-        let mut producer = producer;
-        for i in 0..100 {
-            let msg = format!("Message {}", i);
-            producer.try_produce(msg.as_bytes(), AgentType::Info);
-        }
-    });
-    
-    // Consumer thread
-    let consumer_handle = thread::spawn(move || {
-        let mut consumer = consumer;
-        let mut count = 0;
-        while count < 100 {
-            if let Some(msg) = consumer.try_consume() {
-                println!("Got: {}", msg.as_str());
-                count += 1;
-            }
-        }
-    });
-    
-    producer_handle.join().unwrap();
-    consumer_handle.join().unwrap();
-    Ok(())
-}
-```
-
-### GPU Streaming Example
-
-```rust
-#[cfg(feature = "cuda")]
-use perdix::{Buffer, GpuProducer};
-use perdix::buffer::ffi::StreamContext;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let buffer = Buffer::new(4096)?;
-    let mut gpu = GpuProducer::new(buffer, 0)?;
-    
-    // Create batch of messages
-    let contexts: Vec<StreamContext> = (0..32)
-        .map(|i| StreamContext::new(
-            format!("GPU message {}", i).as_bytes(),
-            AgentType::Assistant
-        ))
-        .collect();
-    
-    // Process batch on GPU
-    gpu.process_batch(&contexts, true)?;
-    
-    Ok(())
-}
-```
-
-## Command Line Interface
-
-Perdix includes a versatile CLI for testing and demonstration:
-
-```bash
-# Interactive REPL mode
-perdix --repl
-
-# Continuous streaming mode
-perdix --stream
-
-# Performance benchmark
-perdix --benchmark
-
-# Zero-copy GPU-to-PTY streaming
-perdix --zerocopy
-
-# Launch external process through GPU PTY
-perdix --claude
-
-# Custom slot count
-perdix --slots=8192 --benchmark
-```
-
-## Integration
-
-### Terminal Multiplexing
-
-Perdix can stream AI assistant output directly to pseudo-terminals:
-
-```rust
-use perdix::Buffer;
-use perdix::pty::portable::PortablePtyWriter;
-
-let buffer = Buffer::new(1024)?;
-let (producer, consumer) = buffer.split();
-
-// Create PTY and start writer thread
-let pty = PortablePtyWriter::new()?;
-let (stop_flag, handle) = pty.start_writer_thread(consumer);
-
-// Producer writes → Ring Buffer → PTY → Terminal
-// ...
-
-stop_flag.store(true, Ordering::Relaxed);
-handle.join().unwrap();
-```
-
-### Runtime Kernel Compilation
-
-For advanced users, Perdix supports runtime CUDA kernel compilation:
-
-```rust
-use perdix::runtime::{CudaRuntimeCompiler, get_kernel_source};
-
-let kernel_info = get_kernel_source(256, 32, true);
-let mut compiler = CudaRuntimeCompiler::new();
-let ptx = compiler.compile(&kernel_info.source, &kernel_info.name)?;
-let module = compiler.load_ptx(&ptx)?;
-let function = module.get_function("produce_messages")?;
-```
-
-## Performance Tuning
-
-### Cache Alignment
-
-Adjust cache line size for your architecture in `build.rs`:
-- x86_64: 64 bytes (default)
-- ARM: 128 bytes
-
-### Batch Size Optimization
-
-Configure batch size based on GPU architecture:
-```rust
-const BATCH_SIZE: usize = 32;  // Warp size for NVIDIA GPUs
-```
-
-### Memory Allocation
-
-For optimal performance, ensure slot count is a power of 2:
-```rust
-let buffer = Buffer::new(4096)?;  // Good: 2^12
-let buffer = Buffer::new(5000)?;  // Bad: Not power of 2 (will fail)
-```
-
-## Benchmarks
-
-Performance measurements on RTX 4070:
-
-| Operation | Performance |
-|-----------|------------|
-| Single message | <1 μs latency |
-| Batch (32 msgs) | ~15 μs total |
-| Sustained streaming | 2.8 GB/s |
-| Peak message rate | 12M msgs/sec |
-
-### Running Benchmarks
-(Work in progress)  
-Perdix includes comprehensive benchmarks using the Criterion framework:
-
-```bash
-# Run all benchmarks
-cargo bench
-
-# Run specific benchmark suite
-cargo bench --bench throughput
-cargo bench --bench latency
-
-# Run with CUDA features (recommended for GPU benchmarks)
-cargo bench --features cuda --bench gpu_vs_cpu
-
-# Quick benchmark run (fewer samples, faster)
-cargo bench -- --quick
-
-# Run benchmarks and save baseline
-cargo bench -- --save-baseline my-baseline
-
-# Compare against baseline
-cargo bench -- --baseline my-baseline
-
-# Generate HTML reports (output in target/criterion/)
-cargo bench -- --verbose
-```
-
-The benchmark results are saved in `target/criterion/` with detailed HTML reports showing:
-- Performance graphs
-- Statistical analysis
-- Regression detection
-- Historical comparisons
-
-For the built-in simple benchmark:
-```bash
-cargo run --release --features cuda --bin perdix -- --benchmark
-```
-
-## Project Structure
-
-```
-perdix/
-├── src/
-│   ├── buffer/          # Ring buffer implementation
-│   │   ├── mod.rs       # Buffer management
-│   │   ├── spsc.rs      # Producer/Consumer logic
-│   │   ├── ffi.rs       # CUDA FFI interface
-│   │   ├── slot.rs      # Message slot structure
-│   │   └── gpu_arena.rs # GPU text arena allocator
-│   ├── runtime/         # CUDA runtime compilation
-│   │   ├── mod.rs       # Runtime system
-│   │   └── jit.rs       # NVRTC integration
-│   ├── gpu.rs           # GPU producer implementation
-│   ├── webgpu.rs        # WebGPU backend implementation
-│   ├── pty/             # Terminal integration
-│   └── main.rs          # CLI application
-├── cuda/
-│   └── perdix_kernel.cu # CUDA kernel implementation
-├── bin/
-│   ├── gpu_test.rs      # GPU testing utility
-│   ├── gpu_pty.rs       # GPU-to-PTY demo
-│   └── test_unified.rs  # Unified kernel tests
-└── benches/             # Performance benchmarks
-    ├── throughput.rs    # Message throughput tests
-    ├── latency.rs       # End-to-end latency tests
-    └── gpu_vs_cpu.rs    # GPU acceleration comparison
-```
-
-## Development
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Safety and FFI
-
-Perdix uses unsafe code for GPU interop. All FFI boundaries are documented with safety requirements:
-
-- CUDA device must be initialized before kernel launches
-- Memory buffers must outlive kernel execution
-- Proper synchronization required for async operations
-
-See documentation for detailed safety requirements.
+- Rust 1.75+
+- CUDA Toolkit 11.0+ (for GPU acceleration)
+- NVIDIA GPU with compute capability 5.0+
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 Robert Pratt
-
-## Acknowledgments
-
-- Built with Rust for memory safety and performance
-- CUDA kernels optimized for modern NVIDIA GPUs
-- WebGPU support for cross-platform compatibility
-- Inspired by high-frequency trading systems and real-time streaming architectures
-
-## Support
-
-For issues, questions, or contributions, please visit the [GitHub repository](https://github.com/the-muppet/perdix).
+MIT OR Apache-2.0

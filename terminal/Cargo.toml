@@ -1,0 +1,40 @@
+[package]
+name = "terminal"
+version = "0.1.0"
+authors = ["Perdix Team"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# Terminal handling
+crossterm = "0.27"
+ratatui = "0.26"
+vte = "0.13"  # ANSI escape sequence parser
+
+# GPU support
+cust = { version = "0.3", optional = true }
+bytemuck = "1.14"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Transport layer dependency
+transport = { path = "../transport" }
+
+[features]
+default = []
+cuda = ["cust", "transport/cuda"]
+
+[build-dependencies]
+cc = "1.0"
+
+[lib]
+name = "terminal"
+path = "src/lib.rs"

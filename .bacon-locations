@@ -1,8 +1,17 @@
-warning	C:\Users\rprat\projects\daedalus\perdix\src\webgpu.rs:321:5	fields `device`, `queue`, and `n_slots` are never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\webgpu.rs:67:5	fields `device` and `header_buffer` are never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:66:8	function `cuMemFreeHost` is never used
-warning	C:\Users\rprat\projects\daedalus\perdix\src\runtime\runtime_compiler.rs:65:8	function `cuMemAllocHost` is never used
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:192:5	fields `pinned_ref` and `pinned_arc` are never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\spsc.rs:14:5	fields `pinned_ref` and `pinned_arc` are never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:98:5	field `stream` is never read
-warning	C:\Users\rprat\projects\daedalus\perdix\src\buffer\mod.rs:60:5	unused import: `std::ptr`
+warning	C:\Users\rprat\projects\perdix\examples\pty_integration.rs:113:15	unused variable: `agent_type`
+warning	C:\Users\rprat\projects\perdix\examples\basic_usage.rs:146:25	unused variable: `message`
+warning	C:\Users\rprat\projects\perdix\examples\basic_usage.rs:126:13	unused variable: `agent_type`
+warning	C:\Users\rprat\projects\perdix\src\bin\test_unified.rs:44:5	calls to `push` immediately after creation
+warning	C:\Users\rprat\projects\perdix\examples\gpu_streaming.rs:10:17	unused imports: `Duration` and `Instant`
+error	C:\Users\rprat\projects\perdix\examples\pty_integration.rs:64:18	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\src\buffer\spsc.rs:133:12::1	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\examples\pty_integration.rs:63:18	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\src\buffer\spsc.rs:133:12::1	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\examples\basic_usage.rs:54:26	no method named `agent_type` found for struct `perdix::buffer::Message` in the current scope
+error	C:\Users\rprat\projects\perdix\examples\pty_integration.rs:56:18	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\src\buffer\spsc.rs:133:12::1	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\examples\pty_integration.rs:55:18	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\src\buffer\spsc.rs:133:12::1	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\examples\basic_usage.rs:45:18	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\src\buffer\spsc.rs:133:12::1	this method takes 1 argument but 2 arguments were supplied
+error	C:\Users\rprat\projects\perdix\examples\basic_usage.rs:94:47	expected `,`, found `"{}\", message.as_str()"`
